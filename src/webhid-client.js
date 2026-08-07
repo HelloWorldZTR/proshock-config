@@ -24,6 +24,19 @@ export function hasNormalEntryCollection(candidate) {
   return hasCollection(candidate, 0xfff0, 0x40);
 }
 
+/**
+ * Return previously authorized ProShock controller devices still attached.
+ */
+export async function getControllerDevices() {
+  if (!("hid" in navigator)) {
+    return [];
+  }
+  const devices = await navigator.hid.getDevices();
+  return devices.filter((device) => (
+    hasConfigCollection(device) || hasNormalEntryCollection(device)
+  ));
+}
+
 export class WebHidClient {
   constructor() {
     this.device = null;
@@ -45,7 +58,10 @@ export class WebHidClient {
       throw new Error("This browser does not support WebHID.");
     }
 
-    const devices = await navigator.hid.requestDevice({ filters: FILTERS });
+    let devices = await getControllerDevices();
+    if (!devices.length) {
+      devices = await navigator.hid.requestDevice({ filters: FILTERS });
+    }
     if (!devices.length) {
       return null;
     }
@@ -92,7 +108,7 @@ export class WebHidClient {
   async waitForConfigDevice(timeoutMs = CONFIG_RECONNECT_TIMEOUT_MS) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      const devices = await navigator.hid.getDevices();
+      const devices = await getControllerDevices();
       const configDevice = devices.find(hasConfigCollection);
       if (configDevice) return configDevice;
       await new Promise((resolve) => window.setTimeout(

@@ -8,6 +8,7 @@ import {
 } from "./protocol.js";
 import {
   WebHidClient,
+  getControllerDevices,
   hasConfigCollection,
   hasNormalEntryCollection,
 } from "./webhid-client.js";
@@ -37,6 +38,56 @@ test("normal and configuration collections remain independently detectable", () 
   assert.equal(hasNormalEntryCollection(config), false);
   assert.equal(COMMAND.KEEP_ALIVE, 0x13);
   assert.equal(COMMAND.EXIT_CONFIG, 0x14);
+});
+
+test("getControllerDevices keeps only previously authorized controllers", async () => {
+  const normal = mockDevice([{ usagePage: 0xfff0, usage: 0x40 }]);
+  const config = mockDevice([{ usagePage: 0xff00, usage: 0x01 }]);
+  const unrelated = mockDevice([{ usagePage: 0x01, usage: 0x06 }]);
+  const originalNavigator = globalThis.navigator;
+
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { hid: { async getDevices() { return [unrelated, normal, config]; } } },
+  });
+  try {
+    assert.deepEqual(await getControllerDevices(), [normal, config]);
+  } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: originalNavigator,
+    });
+  }
+});
+
+test("connect reuses an authorized controller without another chooser", async () => {
+  const config = mockDevice([{ usagePage: 0xff00, usage: 0x01 }]);
+  const originalNavigator = globalThis.navigator;
+  let requestCount = 0;
+
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      hid: {
+        async getDevices() { return [config]; },
+        async requestDevice() {
+          requestCount += 1;
+          return [];
+        },
+      },
+    },
+  });
+  try {
+    const client = new WebHidClient();
+    assert.equal(await client.connect(), config);
+    assert.equal(requestCount, 0);
+    assert.equal(config.opened, true);
+  } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: originalNavigator,
+    });
+  }
 });
 
 test("connect enters config through Feature 0xF0 then reacquires WebHID", async () => {
