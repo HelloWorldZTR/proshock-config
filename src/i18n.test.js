@@ -15,6 +15,8 @@ test("source-message placeholders preserve runtime values", () => {
     translate("3/4 returns recorded · 16/16 ready", "zh-CN"),
     "已记录 3/4 次回中 · 待采样窗口 16/16",
   );
+  assert.equal(translate("7/16 adjusted", "zh-CN"), "已调整 7/16");
+  assert.equal(translate("Sector 13 · Up", "zh-CN"), "扇区 13 · 上");
   assert.equal(translate("Untranslated firmware status", "zh-CN"), "Untranslated firmware status");
 });
 

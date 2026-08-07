@@ -107,16 +107,27 @@
         </div>
       </div>
     </section>
-    <section v-else class="form-section">
-      <header><h1>Advanced</h1><p>Read-only protocol and runtime information.</p></header>
-      <dl class="data-list">
-        <div><dt>Schema</dt><dd>{{ configInfo?.schema_version ?? "—" }}</dd></div>
-        <div><dt>Profile version</dt><dd>{{ profile?.profile_version ?? "—" }}</dd></div>
-        <div><dt>Calibration version</dt><dd>{{ calibration?.calibration_version ?? "—" }}</dd></div>
-        <div><dt>Runtime generation</dt><dd>{{ snapshot?.runtime_generation ?? "—" }}</dd></div>
-        <div><dt>Validation flags</dt><dd>{{ snapshot?.validation_flags ?? "—" }}</dd></div>
-      </dl>
-    </section>
+    <div v-else class="advanced-canvas">
+      <header class="page-heading">
+        <h1>Advanced</h1>
+        <p>Fine-tune physical stick roundness or inspect protocol and runtime information.</p>
+      </header>
+      <StickRoundnessEditor
+        :calibration="calibration"
+        :raw="raw"
+        @update="$emit('roundness', $event)"
+      />
+      <section class="form-section advanced-runtime-section">
+        <header><h2>Runtime information</h2><p>Read-only firmware state.</p></header>
+        <dl class="data-list">
+          <div><dt>Schema</dt><dd>{{ configInfo?.schema_version ?? "—" }}</dd></div>
+          <div><dt>Profile version</dt><dd>{{ profile?.profile_version ?? "—" }}</dd></div>
+          <div><dt>Calibration version</dt><dd>{{ calibration?.calibration_version ?? "—" }}</dd></div>
+          <div><dt>Runtime generation</dt><dd>{{ snapshot?.runtime_generation ?? "—" }}</dd></div>
+          <div><dt>Validation flags</dt><dd>{{ snapshot?.validation_flags ?? "—" }}</dd></div>
+        </dl>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -125,6 +136,7 @@ import { computed } from "vue";
 import CurveEditor from "../CurveEditor.vue";
 import InputViewer from "../components/InputViewer.vue";
 import ResolverEditor from "../components/ResolverEditor.vue";
+import StickRoundnessEditor from "../components/StickRoundnessEditor.vue";
 
 const props = defineProps({
   section: String, selectedProfile: Number, stateLabel: String, profile: Object,
@@ -132,7 +144,7 @@ const props = defineProps({
   snapshot: Object, calibration: Object, configInfo: Object,
   connected: Boolean, readDigitalInput: Function,
 });
-defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "reset-curves", "copy-curve", "calibrate"]);
+defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "roundness", "reset-curves", "copy-curve", "calibrate"]);
 const tabs = [
   { id: "general", label: "General" }, { id: "sticks", label: "Sticks" },
   { id: "triggers", label: "Triggers" }, { id: "buttons", label: "Buttons" },

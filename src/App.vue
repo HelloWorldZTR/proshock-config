@@ -36,7 +36,8 @@
       :connected="connected" :read-digital-input="getDigitalInput"
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
       @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event"
-      @response="setResponse" @resolver="setResolver" @reset-curves="resetCurves" @copy-curve="copyCurve"
+      @response="setResponse" @resolver="setResolver" @roundness="setRoundness"
+      @reset-curves="resetCurves" @copy-curve="copyCurve"
       @calibrate="requestGo('calibration')"
     />
     <QuickCalibrationPage
@@ -280,9 +281,14 @@ const calibrationChanged = computed(() => (
     ? JSON.stringify(calibrationDraft.value) !== JSON.stringify(calibrationBackup.value)
     : false
 ));
-const hasApplyDraft = computed(() => profileChanged.value || globalChanged.value);
+const hasApplyDraft = computed(() => (
+  profileChanged.value || globalChanged.value || calibrationChanged.value
+));
 const hasDraft = computed(() => profileChanged.value || globalChanged.value || calibrationChanged.value);
-const applyValid = computed(() => responseValid.value && resolverValid.value);
+const applyValid = computed(() => (
+  (!profileChanged.value || (responseValid.value && resolverValid.value))
+  && (!calibrationChanged.value || calibrationValidation.value.pass)
+));
 const canApply = computed(() => (
   connected.value
   && !busy.value
@@ -571,6 +577,14 @@ function setResolver(value) {
   if (profileDraft.value) {
     profileDraft.value.resolver = value;
   }
+}
+
+function setRoundness({ stickIndex, sector, radiusQ15 }) {
+  const radii = calibrationDraft.value?.stick?.[stickIndex]?.radius_q15;
+  if (!radii || sector < 0 || sector >= radii.length) {
+    return;
+  }
+  radii[sector] = radiusQ15;
 }
 
 function resetCurves(kind) {
@@ -896,6 +910,7 @@ async function applyDraft() {
       };
     }
     if (profileChanged.value) await writeProfile();
+    if (calibrationChanged.value) await writeCalibration();
     profileBackup.value = clone(profileDraft.value);
     await pollAnalogSnapshot();
     notify("Draft applied to firmware RAM.");

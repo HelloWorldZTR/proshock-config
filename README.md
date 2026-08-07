@@ -33,6 +33,8 @@ npm run build
 - `Apply response` 只更新当前 profile。
 - `Save` 才触发固件的 A/B flash fail-safe 保存路径。
 - 校验页面使用固件返回的真实 Q15/HID 输出，不以浏览器预览代替设备结果。
+- 高级设置中的圆度细节编辑器可独立调整两个摇杆的 16 个物理边界扇区；圆饼和
+  实时位置均使用与固件一致的轴 flip 坐标，修改后仍需依次 `Apply`、`Save`。
 
 ## 临时原型板极性
 
