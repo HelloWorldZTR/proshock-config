@@ -77,6 +77,19 @@
         <i class="header-state-dot"></i>
         <span>{{ state.label }}</span>
       </button>
+      <button
+        v-if="connected"
+        type="button"
+        class="header-disconnect-action"
+        :disabled="busy || disconnecting"
+        :aria-busy="disconnecting"
+        :title="disconnecting ? 'Disconnecting…' : 'Disconnect and restore Gaming Mode'"
+        :aria-label="disconnecting ? 'Disconnecting…' : 'Disconnect and restore Gaming Mode'"
+        @click="emitDisconnect"
+      >
+        <LogOut class="header-disconnect-icon" />
+        <span class="header-disconnect-label">{{ disconnecting ? "Disconnecting…" : "Disconnect" }}</span>
+      </button>
       <div class="more-wrap">
         <button
           ref="moreTrigger"
@@ -110,6 +123,7 @@ import {
   ChevronDown,
   Gauge,
   Home,
+  LogOut,
   MoreHorizontal,
   RefreshCw,
   SlidersHorizontal,
@@ -124,6 +138,7 @@ const props = defineProps({
   profileDraftChanged: { type: Boolean, default: false },
   connected: { type: Boolean, default: false },
   busy: { type: Boolean, default: false },
+  disconnecting: { type: Boolean, default: false },
   currentPage: { type: String, default: "home" },
   state: { type: Object, required: true },
 });
@@ -131,6 +146,7 @@ const emit = defineEmits([
   "navigate",
   "profile-select",
   "primary-action",
+  "disconnect",
   "refresh",
   "import-profile",
   "export-profile",
@@ -179,6 +195,12 @@ function emitPrimaryAction() {
   profileOpen.value = false;
   moreOpen.value = false;
   emit("primary-action", props.state.action);
+}
+
+function emitDisconnect() {
+  profileOpen.value = false;
+  moreOpen.value = false;
+  emit("disconnect");
 }
 
 function emitMore(name) {

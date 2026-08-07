@@ -1,12 +1,6 @@
 <template>
   <main class="app-shell">
     <div v-if="showSecureNote" class="secure-warning">WebHID requires HTTPS or localhost.</div>
-    <div v-if="connected" class="config-mode-warning" role="alert">
-      <span>Configuration mode is active. Using the controller in a game may cause disconnects, detection errors, and slightly reduce performance. Exit configuration mode before testing in a game.</span>
-      <button type="button" :disabled="busy || exitingConfig" @click="requestExitConfig">
-        {{ exitingConfig ? "Exiting…" : "Exit configuration mode" }}
-      </button>
-    </div>
     <AppHeader
       :profiles="profileCards"
       :active="configInfo?.active_profile ?? selectedProfile"
@@ -15,11 +9,13 @@
       :profile-draft-changed="profileChanged"
       :connected="connected"
       :busy="busy"
+      :disconnecting="exitingConfig"
       :current-page="page"
       :state="headerState"
       @navigate="requestPageNavigation"
       @profile-select="requestProfileSwitch"
       @primary-action="handleHeaderAction"
+      @disconnect="requestExitConfig"
       @refresh="requestRefresh"
       @import-profile="chooseProfileImport"
       @export-profile="downloadProfile"
@@ -80,6 +76,10 @@
       @discard="discardFromLeaveGuard"
       @keep-ram="keepRamFromLeaveGuard"
     />
+    <ConfigSessionWarningDialog
+      v-if="configSessionWarningOpen && connected"
+      @acknowledge="acknowledgeConfigSessionWarning"
+    />
     <input ref="profileFileInput" class="visually-hidden" type="file" accept=".json,.proshock-profile.json" @change="importProfileFile">
     <div v-if="toast" class="toast" role="status">{{ toast }}</div>
   </main>
@@ -95,12 +95,14 @@ import {
   shouldGuardNavigation,
 } from "./app-shell-state.js";
 import AppHeader from "./components/AppHeader.vue";
+import ConfigSessionWarningDialog from "./components/ConfigSessionWarningDialog.vue";
 import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
 import HomePage from "./pages/HomePage.vue";
 import ConfiguratorPage from "./pages/ConfiguratorPage.vue";
 import QuickCalibrationPage from "./pages/QuickCalibrationPage.vue";
 import DiagnosticsPage from "./pages/DiagnosticsPage.vue";
 import { cloneConfigData } from "./clone-data.js";
+import { configSessionWarningStore } from "./config-session-warning-store.js";
 import {
   exportBackup,
   exportProfile,
@@ -171,6 +173,7 @@ const connected = ref(false);
 const busy = ref(false);
 const saveInProgress = ref(false);
 const exitingConfig = ref(false);
+const configSessionWarningOpen = ref(false);
 const deviceLabel = ref("Disconnected");
 const configInfo = ref(null);
 const lastStatus = ref(null);
@@ -828,6 +831,7 @@ async function connectFlow() {
     }
     digitalInputCommandSupported = null;
     connected.value = true;
+    configSessionWarningOpen.value = configSessionWarningStore.shouldShow();
     deviceLabel.value = `${device.productName || "ProShock 4"} · Configuration Mode`;
     await sendKeepAlive();
     startKeepAlive();
@@ -840,11 +844,17 @@ async function connectFlow() {
   } catch (error) {
     stopSessionTimers();
     connected.value = false;
+    configSessionWarningOpen.value = false;
     log(error.message);
     notify(error.message);
   } finally {
     busy.value = false;
   }
+}
+
+function acknowledgeConfigSessionWarning(suppressFutureWarnings) {
+  configSessionWarningStore.acknowledge(suppressFutureWarnings);
+  configSessionWarningOpen.value = false;
 }
 
 async function sendKeepAlive() {
@@ -904,6 +914,7 @@ async function exitConfigSession() {
     notify("The session is closing. Firmware timeout will restore Gaming Mode automatically.");
   } finally {
     connected.value = false;
+    configSessionWarningOpen.value = false;
     deviceLabel.value = "Gaming Mode";
     try {
       await client.close();
@@ -1676,6 +1687,7 @@ function handleHidDisconnect(event) {
     return;
   }
   connected.value = false;
+  configSessionWarningOpen.value = false;
   deviceLabel.value = exitRequested ? "Gaming Mode" : "Configuration session ended";
   stopCenterTimer();
   stopSessionTimers();
