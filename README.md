@@ -34,5 +34,12 @@ npm run build
 - `Save` 才触发固件的 A/B flash fail-safe 保存路径。
 - 校验页面使用固件返回的真实 Q15/HID 输出，不以浏览器预览代替设备结果。
 
+## 临时原型板极性
+
+当前原型 PCB 的两个 Y 轴电路方向与后续产品设计相反。前端通过
+`src/calibration-polarity.js` 中的临时轴极性配置，使四角回中识别、圆度分区和
+raw preview 与当前固件保持一致。量产 PCB 修正后，应按文件中的 TODO 将 LY/RY
+恢复为反转状态。
+
 界面使用的 DualShock 图形资源及其授权信息见
 [`src/assets/dualshock-tools-LICENSE.txt`](src/assets/dualshock-tools-LICENSE.txt)。

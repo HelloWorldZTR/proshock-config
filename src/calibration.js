@@ -8,6 +8,7 @@ import {
   ROUNDNESS_SECTOR_COUNT,
 } from "./protocol.js";
 import { cloneConfigData } from "./clone-data.js";
+import { calibrationAxisSign } from "./calibration-polarity.js";
 
 export const CENTER_SAMPLE_COUNT = 64;
 export const CENTER_RETURN_SAMPLE_COUNT = 16;
@@ -34,10 +35,10 @@ export const WIZARD_STEPS = [
 ];
 
 export const CENTER_RETURN_DIRECTIONS = Object.freeze([
-  Object.freeze({ id: "top-left", label: "Top left", xSign: -1, ySign: 1 }),
-  Object.freeze({ id: "bottom-right", label: "Bottom right", xSign: 1, ySign: -1 }),
-  Object.freeze({ id: "top-right", label: "Top right", xSign: 1, ySign: 1 }),
-  Object.freeze({ id: "bottom-left", label: "Bottom left", xSign: -1, ySign: -1 }),
+  Object.freeze({ id: "top-left", label: "Top left", xSign: -1, ySign: -1 }),
+  Object.freeze({ id: "bottom-right", label: "Bottom right", xSign: 1, ySign: 1 }),
+  Object.freeze({ id: "top-right", label: "Top right", xSign: 1, ySign: -1 }),
+  Object.freeze({ id: "bottom-left", label: "Bottom left", xSign: -1, ySign: 1 }),
 ]);
 
 export const CURVE_PRESETS = {
@@ -319,10 +320,10 @@ export function recordCenterReturnSample(capture, sample) {
       const yIndex = xIndex + 1;
       const xDisplacement = (
         sample.adc[xIndex] - capture.baseline[xIndex]
-      ) * direction.xSign;
+      ) * calibrationAxisSign(xIndex) * direction.xSign;
       const yDisplacement = (
         sample.adc[yIndex] - capture.baseline[yIndex]
-      ) * direction.ySign;
+      ) * calibrationAxisSign(yIndex) * direction.ySign;
       if (
         xDisplacement >= CENTER_GESTURE_MIN_COUNTS
         && yDisplacement >= CENTER_GESTURE_MIN_COUNTS
@@ -379,7 +380,7 @@ export function normalizeAxis(raw, calibration, axisIndex) {
       / (calibration.raw_max - calibration.raw_center);
   }
   normalized = Math.max(-1, Math.min(1, normalized));
-  return axisIndex === 1 || axisIndex === 3 ? -normalized : normalized;
+  return normalized * calibrationAxisSign(axisIndex);
 }
 
 export function normalizedAxis(raw, calibration) {

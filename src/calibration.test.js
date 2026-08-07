@@ -22,12 +22,14 @@ import {
   createCenterReturnCapture,
   createTriggerCycleCapture,
   nextWizardStep,
+  normalizeAxis,
   recordCenterReturnSample,
   recordTriggerCycleSample,
   validateCalibration,
   validateResponse,
 } from "./calibration.js";
 import { cloneConfigData } from "./clone-data.js";
+import { TEMPORARY_CALIBRATION_AXIS_INVERT } from "./calibration-polarity.js";
 
 function snapshot(sequence, adc) {
   return { sequence, adc };
@@ -74,10 +76,10 @@ test("center capture requires four diagonal deflections and return windows", () 
   ));
   const capture = createCenterReturnCapture(baseline);
   const directions = [
-    [500, 3600, 500, 3600, 200, 200],
-    [3600, 500, 3600, 500, 200, 200],
-    [3600, 3600, 3600, 3600, 200, 200],
     [500, 500, 500, 500, 200, 200],
+    [3600, 3600, 3600, 3600, 200, 200],
+    [3600, 500, 3600, 500, 200, 200],
+    [500, 3600, 500, 3600, 200, 200],
   ];
   assert.equal(recordCenterReturnSample(
     capture,
@@ -113,6 +115,23 @@ test("center capture requires four diagonal deflections and return windows", () 
   assert.ok(result.axes.every((axis) => axis.pass));
 });
 
+test("temporary calibration polarity matches the prototype firmware", () => {
+  const calibration = {
+    raw_min: 0,
+    raw_center: 2048,
+    raw_max: 4095,
+  };
+
+  assert.deepEqual(
+    [...TEMPORARY_CALIBRATION_AXIS_INVERT],
+    [false, false, false, false],
+  );
+  assert.ok(normalizeAxis(1024, calibration, 1) < 0);
+  assert.ok(normalizeAxis(3072, calibration, 1) > 0);
+  assert.ok(normalizeAxis(1024, calibration, 3) < 0);
+  assert.ok(normalizeAxis(3072, calibration, 3) > 0);
+});
+
 test("stick range produces complete 16-sector roundness", () => {
   const neutral = {
     axes: Array.from({ length: 4 }, (_, index) => ({
@@ -128,7 +147,7 @@ test("stick range produces complete 16-sector roundness", () => {
     for (let repeat = 0; repeat < 10; repeat += 1) {
       samples.push(snapshot(sequence, [
         Math.round(2048 + Math.cos(angle) * 1800),
-        Math.round(2048 - Math.sin(angle) * 1800),
+        Math.round(2048 + Math.sin(angle) * 1800),
         2048,
         2048,
         200,
@@ -140,6 +159,37 @@ test("stick range produces complete 16-sector roundness", () => {
   const result = analyzeStickRange(samples, 0, neutral);
   assert.ok(result.sectorCounts.every((count) => count >= 8));
   assert.ok(result.radius_q15.every((radius) => radius >= 27852 && radius <= 49151));
+});
+
+test("temporary polarity keeps roundness sectors aligned with firmware coordinates", () => {
+  const neutral = {
+    axes: Array.from({ length: 4 }, (_, index) => ({
+      name: ["LX", "LY", "RX", "RY"][index],
+      center: 2048,
+      noiseSpan: 0,
+      pass: true,
+    })),
+  };
+  const samples = [];
+  let sequence = 0;
+  for (let sector = 0; sector < 16; sector += 1) {
+    const angle = sector * Math.PI * 2 / 16;
+    const radius = sector === 2 ? 0.9 : 1;
+    for (let repeat = 0; repeat < 10; repeat += 1) {
+      samples.push(snapshot(sequence, [
+        Math.round(2048 + Math.cos(angle) * 1600 * radius),
+        Math.round(2048 + Math.sin(angle) * 1600 * radius),
+        2048,
+        2048,
+        200,
+        200,
+      ]));
+      sequence += 1;
+    }
+  }
+
+  const result = analyzeStickRange(samples, 0, neutral);
+  assert.ok(result.radius_q15[2] < result.radius_q15[14]);
 });
 
 test("stick range rejects a small circle normalized against its own envelope", () => {
@@ -158,7 +208,7 @@ test("stick range rejects a small circle normalized against its own envelope", (
     for (let repeat = 0; repeat < 10; repeat += 1) {
       samples.push(snapshot(sequence, [
         Math.round(2048 + Math.cos(angle) * 256),
-        Math.round(2048 - Math.sin(angle) * 256),
+        Math.round(2048 + Math.sin(angle) * 256),
         2048,
         2048,
         200,
@@ -190,7 +240,7 @@ test("stick range rejects excessive normalized neutral noise", () => {
     for (let repeat = 0; repeat < 10; repeat += 1) {
       samples.push(snapshot(sequence, [
         Math.round(2048 + Math.cos(angle) * 800),
-        Math.round(2048 - Math.sin(angle) * 800),
+        Math.round(2048 + Math.sin(angle) * 800),
         2048,
         2048,
         200,
@@ -221,7 +271,7 @@ test("stick boundary uses the outer envelope instead of accumulated pass count",
     for (let repeat = 0; repeat < 10; repeat += 1) {
       samples.push(snapshot(sequence, [
         Math.round(2048 + Math.cos(angle) * 1800),
-        Math.round(2048 - Math.sin(angle) * 1800),
+        Math.round(2048 + Math.sin(angle) * 1800),
         2048,
         2048,
         200,
