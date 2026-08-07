@@ -570,9 +570,11 @@ input[type=range] { width: 100%; padding: 0; accent-color: var(--accent); }
 .calibration-review { margin-top: 18px; }
 .check-list li { display: grid; grid-template-columns: 44px minmax(120px, .4fr) 1fr; gap: 12px; align-items: center; min-height: 42px; padding: 8px 12px; border-left: 2px solid var(--border-strong); background: rgba(255,255,255,.018); }
 .check-list li.pass { border-left-color: var(--success); }
+.check-list li.warning { border-left-color: var(--warning); }
 .check-list li.fail { border-left-color: var(--danger); }
 .check-list li > strong { color: var(--muted); font-size: 9px; letter-spacing: .08em; }
 .check-list li.pass > strong { color: var(--success); }
+.check-list li.warning > strong { color: var(--warning); }
 .check-list li.fail > strong { color: var(--danger); }
 .check-list li > span { font-size: 12px; }
 .check-list li > small { color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }

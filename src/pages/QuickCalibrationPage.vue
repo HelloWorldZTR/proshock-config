@@ -23,8 +23,8 @@
     >
       <template #validation>
         <ul class="check-list calibration-review">
-          <li v-for="check in checks" :key="check.label" :class="{ pass: check.pass, fail: !check.pass }">
-            <strong>{{ check.pass ? "PASS" : "FAIL" }}</strong>
+          <li v-for="check in checks" :key="check.label" :class="checkStatus(check)">
+            <strong>{{ checkStatus(check).toUpperCase() }}</strong>
             <span>{{ check.label }}</span>
             <small>{{ check.detail }}</small>
           </li>
@@ -42,6 +42,11 @@
 
 <script setup>
 import CalibrationWizard from "../CalibrationWizard.vue";
+
+function checkStatus(check) {
+  return check.status || (check.pass ? "pass" : "fail");
+}
+
 defineProps({
   step: String, busy: Boolean, error: String, neutralResult: Object, leftRange: Object,
   centerCaptureActive: Boolean, centerCaptureStatus: Object,

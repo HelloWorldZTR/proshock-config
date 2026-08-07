@@ -372,10 +372,19 @@ const calibrationChecks = computed(() => {
     });
   }
   if (neutralResult.value) {
+    if (neutralResult.value.settleTimeouts?.length) {
+      checks.push({
+        pass: true,
+        status: "warning",
+        label: "Center settling",
+        detail: `The rolling stability wait timed out after ${neutralResult.value.settleTimeouts.join(" / ")} returns; calibration continued with the recorded windows.`,
+      });
+    }
     neutralResult.value.axes.forEach((axis) => checks.push({
-      pass: axis.pass,
+      pass: true,
+      status: axis.warning ? "warning" : "pass",
       label: `${axis.name} neutral stability`,
-      detail: `Returns ${axis.returnCenters?.join(" / ") || axis.center}; P05–P95 span ${axis.noiseSpan.toFixed(1)} counts (limit 32).`,
+      detail: `Returns ${axis.returnCenters?.join(" / ") || axis.center}; max window noise ${axis.noiseSpan.toFixed(1)} counts (warn > 32); direction spread ${axis.returnCenterSpan?.toFixed(1) || "0.0"} counts (warn > 64).`,
     }));
   }
   [leftRange.value, rightRange.value].filter(Boolean).forEach((range) => checks.push({
@@ -1186,7 +1195,11 @@ function scheduleCenterPoll() {
         syncCenterCaptureStatus();
         if (complete) {
           const returnWindows = centerReturnCapture.returnWindows;
-          neutralResult.value = analyzeCenterReturns(returnWindows);
+          const settleTimeouts = [...centerReturnCapture.settleTimeouts];
+          neutralResult.value = {
+            ...analyzeCenterReturns(returnWindows),
+            settleTimeouts,
+          };
           stopCenterTimer();
           centerCaptureStatus.value = {
             phase: "complete",

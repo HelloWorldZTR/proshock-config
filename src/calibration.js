@@ -16,7 +16,15 @@ export const CENTER_NOISE_MAX_COUNTS = 32;
 export const CENTER_NOISE_MAX_RATIO = 0.02;
 export const CENTER_GESTURE_MIN_COUNTS = 768;
 export const CENTER_RELEASE_MAX_COUNTS = 128;
-export const CENTER_RELEASE_STABLE_SAMPLES = 5;
+// Require a quiet 8-sample rolling window before recording a return. If the
+// stick keeps moving for 32 in-range samples, continue and surface a warning
+// instead of trapping the user in calibration.
+export const CENTER_SETTLE_SAMPLE_COUNT = 8;
+export const CENTER_SETTLE_MAX_COUNTS = 16;
+export const CENTER_SETTLE_TIMEOUT_SAMPLES = 32;
+// Direction-dependent spring return is useful diagnostic data, not a reason
+// to reject otherwise valid numeric axis bounds.
+export const CENTER_RETURN_SPREAD_WARNING_COUNTS = 64;
 export const RANGE_SAMPLE_LIMIT = 1024;
 export const RIM_MIN_RADIUS = 0.85;
 export const SECTOR_MIN_SAMPLES = 8;
@@ -251,7 +259,23 @@ export function analyzeCenterReturns(returnWindows) {
     const returnCenters = returns.map((entry) => entry.axes[axisIndex].center);
     const p05 = percentile(values, 0.05);
     const p95 = percentile(values, 0.95);
-    const noiseSpan = p95 - p05;
+    const combinedSpan = p95 - p05;
+    const windowNoiseSpans = returns.map((entry) => (
+      entry.axes[axisIndex].noiseSpan
+    ));
+    const noiseSpan = Math.max(...windowNoiseSpans);
+    const returnCenterSpan = Math.max(...returnCenters) - Math.min(...returnCenters);
+    const warnings = [];
+    if (noiseSpan > CENTER_NOISE_MAX_COUNTS) {
+      warnings.push(
+        `one return window spans ${noiseSpan.toFixed(1)} counts (warning above ${CENTER_NOISE_MAX_COUNTS})`,
+      );
+    }
+    if (returnCenterSpan > CENTER_RETURN_SPREAD_WARNING_COUNTS) {
+      warnings.push(
+        `direction-dependent centers span ${returnCenterSpan.toFixed(1)} counts (warning above ${CENTER_RETURN_SPREAD_WARNING_COUNTS})`,
+      );
+    }
     return {
       name,
       center: Math.round(median(returnCenters)),
@@ -259,15 +283,14 @@ export function analyzeCenterReturns(returnWindows) {
       p05,
       p95,
       noiseSpan,
-      pass: noiseSpan <= CENTER_NOISE_MAX_COUNTS,
+      combinedSpan,
+      returnCenterSpan,
+      windowNoiseSpans,
+      warning: warnings.length > 0,
+      warnings,
+      pass: true,
     };
   });
-  const failed = axes.filter((axis) => !axis.pass);
-  if (failed.length) {
-    throw new Error(
-      `Center return unstable: ${failed.map((axis) => `${axis.name} span ${axis.noiseSpan.toFixed(1)}`).join(", ")}.`,
-    );
-  }
   return {
     axes,
     returns: returns.map(({ direction, axes: returnAxes }) => ({
@@ -294,7 +317,9 @@ export function createCenterReturnCapture(baselineSnapshots) {
     directionIndex: 0,
     phase: "waiting-deflection",
     deflectedMask: 0,
-    releaseStableSamples: 0,
+    settleSamples: [],
+    settleElapsedSamples: 0,
+    settleTimeouts: [],
     captureSamples: [],
     returnWindows: [],
     lastSequence: null,
@@ -343,14 +368,34 @@ export function recordCenterReturnSample(capture, sample) {
       <= CENTER_RELEASE_MAX_COUNTS
   ));
   if (!released) {
-    capture.releaseStableSamples = 0;
+    capture.settleSamples = [];
+    capture.settleElapsedSamples = 0;
     capture.captureSamples = [];
+    if (capture.phase === "settling" || capture.phase === "sampling") {
+      capture.phase = "waiting-release";
+    }
     return false;
   }
 
-  if (capture.phase === "waiting-release") {
-    capture.releaseStableSamples += 1;
-    if (capture.releaseStableSamples >= CENTER_RELEASE_STABLE_SAMPLES) {
+  if (capture.phase === "waiting-release" || capture.phase === "settling") {
+    capture.phase = "settling";
+    capture.settleElapsedSamples += 1;
+    capture.settleSamples.push(sample);
+    if (capture.settleSamples.length > CENTER_SETTLE_SAMPLE_COUNT) {
+      capture.settleSamples = capture.settleSamples.slice(-CENTER_SETTLE_SAMPLE_COUNT);
+    }
+    const stable = capture.settleSamples.length >= CENTER_SETTLE_SAMPLE_COUNT
+      && AXES.every((_, axisIndex) => {
+        const values = capture.settleSamples.map((entry) => entry.adc[axisIndex]);
+        return Math.max(...values) - Math.min(...values) <= CENTER_SETTLE_MAX_COUNTS;
+      });
+    const timedOut = capture.settleElapsedSamples >= CENTER_SETTLE_TIMEOUT_SAMPLES;
+    if (stable || timedOut) {
+      if (!stable) {
+        if (!capture.settleTimeouts.includes(direction.id)) {
+          capture.settleTimeouts.push(direction.id);
+        }
+      }
       capture.phase = "sampling";
       capture.captureSamples = [];
     }
@@ -365,7 +410,8 @@ export function recordCenterReturnSample(capture, sample) {
   capture.directionIndex += 1;
   capture.phase = "waiting-deflection";
   capture.deflectedMask = 0;
-  capture.releaseStableSamples = 0;
+  capture.settleSamples = [];
+  capture.settleElapsedSamples = 0;
   capture.captureSamples = [];
   return capture.directionIndex >= CENTER_RETURN_DIRECTIONS.length;
 }

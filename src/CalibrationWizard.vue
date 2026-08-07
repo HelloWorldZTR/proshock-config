@@ -113,6 +113,7 @@ const centerStatusLabel = computed(() => {
     baseline: "Keep both sticks released while the starting center is checked",
     "waiting-deflection": `Push both sticks fully ${direction}`,
     "waiting-release": "Now release both sticks",
+    settling: "Hands off — waiting for both sticks to settle",
     sampling: `Hands off — recording the ${direction} return`,
     complete: "Four center returns recorded",
   }[props.centerCaptureStatus?.phase] || `Push both sticks fully ${direction}`;

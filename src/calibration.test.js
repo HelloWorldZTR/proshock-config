@@ -21,6 +21,8 @@ import {
   curvePresetToQ15,
   createCenterReturnCapture,
   createTriggerCycleCapture,
+  CENTER_SETTLE_SAMPLE_COUNT,
+  CENTER_SETTLE_TIMEOUT_SAMPLES,
   nextWizardStep,
   normalizeAxis,
   recordCenterReturnSample,
@@ -91,7 +93,7 @@ test("center capture requires four diagonal deflections and return windows", () 
       capture,
       snapshot(sequence++, deflected),
     ), false);
-    for (let stableIndex = 0; stableIndex < 5; stableIndex += 1) {
+    for (let stableIndex = 0; stableIndex < CENTER_SETTLE_SAMPLE_COUNT; stableIndex += 1) {
       assert.equal(recordCenterReturnSample(
         capture,
         snapshot(sequence++, [...center]),
@@ -113,6 +115,67 @@ test("center capture requires four diagonal deflections and return windows", () 
   assert.equal(result.sampleCount, 64);
   assert.deepEqual(result.axes.map((axis) => axis.center), center.slice(0, 4));
   assert.ok(result.axes.every((axis) => axis.pass));
+});
+
+test("stable direction-dependent centers warn without blocking calibration", () => {
+  let sequence = 0;
+  const centers = [2000, 2040, 2080, 2120];
+  const windows = centers.map((center) => (
+    Array.from({ length: 16 }, () => snapshot(
+      sequence++,
+      [center, center, center, center, 200, 200],
+    ))
+  ));
+
+  const result = analyzeCenterReturns(windows);
+  assert.ok(result.axes.every((axis) => axis.pass));
+  assert.ok(result.axes.every((axis) => axis.warning));
+  assert.ok(result.axes.every((axis) => axis.returnCenterSpan === 120));
+  assert.deepEqual(result.axes.map((axis) => axis.center), [2060, 2060, 2060, 2060]);
+});
+
+test("center capture waits for rolling stability and falls through on timeout", () => {
+  let sequence = 0;
+  const center = [2048, 2048, 2048, 2048, 200, 200];
+  const baseline = Array.from({ length: 16 }, () => snapshot(sequence++, [...center]));
+  const capture = createCenterReturnCapture(baseline);
+  recordCenterReturnSample(
+    capture,
+    snapshot(sequence++, [500, 500, 500, 500, 200, 200]),
+  );
+
+  for (let index = 0; index < CENTER_SETTLE_SAMPLE_COUNT; index += 1) {
+    const offset = -100 + index * 20;
+    recordCenterReturnSample(
+      capture,
+      snapshot(sequence++, [2048 + offset, 2048 + offset, 2048 + offset, 2048 + offset, 200, 200]),
+    );
+  }
+  assert.equal(capture.phase, "settling");
+
+  for (let index = 0; index < CENTER_SETTLE_SAMPLE_COUNT; index += 1) {
+    recordCenterReturnSample(
+      capture,
+      snapshot(sequence++, [2060, 2060, 2060, 2060, 200, 200]),
+    );
+  }
+  assert.equal(capture.phase, "sampling");
+  assert.deepEqual(capture.settleTimeouts, []);
+
+  const timeoutCapture = createCenterReturnCapture(baseline);
+  recordCenterReturnSample(
+    timeoutCapture,
+    snapshot(sequence++, [500, 500, 500, 500, 200, 200]),
+  );
+  for (let index = 0; index < CENTER_SETTLE_TIMEOUT_SAMPLES; index += 1) {
+    const offset = index % 2 ? -100 : 100;
+    recordCenterReturnSample(
+      timeoutCapture,
+      snapshot(sequence++, [2048 + offset, 2048 + offset, 2048 + offset, 2048 + offset, 200, 200]),
+    );
+  }
+  assert.equal(timeoutCapture.phase, "sampling");
+  assert.deepEqual(timeoutCapture.settleTimeouts, ["top-left"]);
 });
 
 test("temporary calibration polarity matches the prototype firmware", () => {
