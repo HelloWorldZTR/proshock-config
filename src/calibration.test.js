@@ -444,12 +444,19 @@ test("profile and analog payload round trips preserve fixed sizes", () => {
     color_rgb: [1, 2, 3],
     stick_response: [createLinearResponse(), createLinearResponse()],
     trigger_response: [createLinearResponse(), createLinearResponse()],
+    stick_shape: [
+      { name: "Left stick", scale_q15: Array(16).fill(32768) },
+      { name: "Right stick", scale_q15: Array(16).fill(32768) },
+    ],
   };
+  profile.stick_shape[0].scale_q15[12] = 12345;
   writeProfileDraftToPayload(profileBytes, profile);
   const parsedProfile = parseProfile(profileBytes, 2);
   assert.equal(parsedProfile.profile_version, PROFILE_VERSION);
   assert.deepEqual(parsedProfile.color_rgb, [1, 2, 3]);
   assert.equal(parsedProfile.raw[250], 0);
+  assert.equal(parsedProfile.stick_shape[0].scale_q15[12], 12345);
+  assert.equal(parsedProfile.stick_shape[1].scale_q15[15], 32768);
 
   const calibrationBytes = new Uint8Array(ANALOG_CALIBRATION_SIZE);
   calibrationBytes.fill(0x5a);

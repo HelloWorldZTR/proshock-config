@@ -181,32 +181,19 @@ label { display: grid; gap: 8px; color: var(--secondary); font-size: 13px; }
 .roundness-editor-heading > div { max-width: 760px; }
 .roundness-editor-heading h2 { margin-bottom: 7px; }
 .roundness-editor-heading p:last-child { margin: 0; }
+.roundness-sector-map { margin: 0; padding: 11px 13px; border-left: 2px solid var(--accent); background: rgba(85,214,255,.045); color: var(--secondary); font: 10px ui-monospace, monospace; }
 .roundness-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .roundness-editor-stick { min-width: 0; padding: 16px; border: 1px solid var(--border); background: rgba(255,255,255,.014); }
-.roundness-editor-stick > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.roundness-editor-stick > header { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .roundness-editor-stick > header strong { font-size: 13px; }
 .roundness-editor-stick > header span { color: var(--accent); font: 9px ui-monospace, monospace; }
-.roundness-pie-layout { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(180px, .72fr); align-items: center; gap: 14px; padding-top: 14px; }
-.roundness-pie-layout svg { display: block; width: min(100%, 360px); aspect-ratio: 1; margin: auto; overflow: visible; }
-.roundness-sector { fill: rgba(255,255,255,.008); stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; cursor: pointer; transition: fill .12s, stroke .12s; }
-.roundness-sector:hover, .roundness-sector:focus { fill: rgba(85,214,255,.07); stroke: rgba(85,214,255,.35); outline: none; }
-.roundness-sector.live { fill: rgba(82,227,164,.11); stroke: rgba(82,227,164,.55); }
-.roundness-sector.selected { fill: rgba(85,214,255,.14); stroke: var(--accent); stroke-width: 2; }
-.roundness-pie-layout svg line { stroke: rgba(255,255,255,.06); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
-.roundness-ideal-circle { fill: none; stroke: rgba(255,255,255,.28); stroke-width: 1.5; stroke-dasharray: 5 5; vector-effect: non-scaling-stroke; pointer-events: none; }
-.roundness-boundary-shape { fill: rgba(85,214,255,.075); stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; pointer-events: none; }
-.roundness-live-dot { fill: var(--success); stroke: rgba(82,227,164,.25); stroke-width: 10; vector-effect: non-scaling-stroke; pointer-events: none; }
-.roundness-pie-layout svg text { fill: var(--secondary); font: 10px ui-sans-serif, sans-serif; font-weight: 700; pointer-events: none; }
-.roundness-sector-control { display: grid; gap: 16px; align-content: center; }
-.roundness-sector-control > div:first-child { display: grid; gap: 5px; }
-.roundness-sector-control > div:first-child span, .roundness-sector-control label > span { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .07em; }
-.roundness-sector-control > div:first-child strong { color: var(--text); font: 11px ui-monospace, monospace; }
-.roundness-sector-control label { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
-.roundness-sector-control label output { color: var(--accent); font: 11px ui-monospace, monospace; }
-.roundness-sector-control label input { grid-column: 1 / -1; }
-.roundness-sector-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.roundness-sector-actions button { min-height: 30px; padding-inline: 8px; font-size: 9px; }
-.roundness-sector-control > small { color: var(--muted); font-size: 9px; line-height: 1.5; }
+.roundness-editor-stick > header button { min-height: 28px; padding-inline: 8px; font-size: 9px; }
+.roundness-raw-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; padding-top: 14px; }
+.roundness-raw-grid label { min-width: 0; display: grid; gap: 6px; padding: 8px; border: 1px solid var(--border); background: rgba(255,255,255,.012); }
+.roundness-raw-grid label > span { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; }
+.roundness-raw-grid b { color: var(--accent); font: 10px ui-monospace, monospace; }
+.roundness-raw-grid small { color: var(--muted); font: 8px ui-monospace, monospace; }
+.roundness-raw-grid input { width: 100%; min-width: 0; min-height: 32px; padding: 5px 6px; font: 11px ui-monospace, monospace; }
 .advanced-runtime-section { padding-top: 24px; border-top: 1px solid var(--border); }
 .telemetry-band { display: grid; grid-template-columns: repeat(5, 1fr); min-height: 74px; margin: 0 max(-18px, -2vw); padding: 14px max(18px, 2vw); border-bottom: 1px solid var(--border); background: rgba(16,23,32,.46); }
 .telemetry-band > div { display: grid; align-content: center; gap: 5px; padding: 0 18px; border-right: 1px solid var(--border); }
@@ -736,7 +723,7 @@ input[type=range] { width: 100%; padding: 0; accent-color: var(--accent); }
   .roundness-stick-grid, .response-trigger-grid { grid-template-columns: 1fr; }
   .roundness-toolbar { align-items: flex-start; flex-direction: column; }
   .roundness-editor-heading { align-items: flex-start; flex-direction: column; }
-  .roundness-pie-layout { grid-template-columns: 1fr; }
+  .roundness-raw-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

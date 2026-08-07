@@ -110,12 +110,11 @@
     <div v-else class="advanced-canvas">
       <header class="page-heading">
         <h1>Advanced</h1>
-        <p>Fine-tune physical stick roundness or inspect protocol and runtime information.</p>
+        <p>Fine-tune the current Profile's stick shape or inspect protocol and runtime information.</p>
       </header>
       <StickRoundnessEditor
-        :calibration="calibration"
-        :raw="raw"
-        @update="$emit('roundness', $event)"
+        :profile="profile"
+        @update="$emit('stick-shape', $event)"
       />
       <section class="form-section advanced-runtime-section">
         <header><h2>Runtime information</h2><p>Read-only firmware state.</p></header>
@@ -144,7 +143,7 @@ const props = defineProps({
   snapshot: Object, calibration: Object, configInfo: Object,
   connected: Boolean, readDigitalInput: Function,
 });
-defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "roundness", "reset-curves", "copy-curve", "calibrate"]);
+defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "stick-shape", "reset-curves", "copy-curve", "calibrate"]);
 const tabs = [
   { id: "general", label: "General" }, { id: "sticks", label: "Sticks" },
   { id: "triggers", label: "Triggers" }, { id: "buttons", label: "Buttons" },

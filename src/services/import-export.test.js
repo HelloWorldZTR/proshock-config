@@ -36,18 +36,21 @@ test("Profile export never contains physical calibration", () => {
   const envelope = exportProfile(fixtureProfile());
   assert.equal(envelope.format, PROFILE_FORMAT);
   assert.equal("calibration_bytes" in envelope.payload, false);
+  assert.equal(envelope.payload.profile_version, PROFILE_VERSION);
   assert.doesNotThrow(() => validateEnvelope(envelope));
 });
 
 test("Profile import preserves reserved bytes from target slot", () => {
   const source = fixtureProfile();
   source.color_rgb = [1, 2, 3];
+  source.stick_shape[0].scale_q15[4] = 45678;
   const envelope = exportProfile(source);
   const target = fixtureProfile();
   target.raw.fill(0xa5, 104);
   const imported = importProfile(envelope, 2, target.raw);
   assert.deepEqual(imported.color_rgb, [1, 2, 3]);
   assert.equal(imported.raw[250], 0xa5);
+  assert.equal(imported.stick_shape[0].scale_q15[4], 45678);
 });
 
 test("Future versions and corrupt documents are rejected", () => {

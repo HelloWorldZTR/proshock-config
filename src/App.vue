@@ -36,7 +36,7 @@
       :connected="connected" :read-digital-input="getDigitalInput"
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
       @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event"
-      @response="setResponse" @resolver="setResolver" @roundness="setRoundness"
+      @response="setResponse" @resolver="setResolver" @stick-shape="setStickShape"
       @reset-curves="resetCurves" @copy-curve="copyCurve"
       @calibrate="requestGo('calibration')"
     />
@@ -281,14 +281,9 @@ const calibrationChanged = computed(() => (
     ? JSON.stringify(calibrationDraft.value) !== JSON.stringify(calibrationBackup.value)
     : false
 ));
-const hasApplyDraft = computed(() => (
-  profileChanged.value || globalChanged.value || calibrationChanged.value
-));
+const hasApplyDraft = computed(() => profileChanged.value || globalChanged.value);
 const hasDraft = computed(() => profileChanged.value || globalChanged.value || calibrationChanged.value);
-const applyValid = computed(() => (
-  (!profileChanged.value || (responseValid.value && resolverValid.value))
-  && (!calibrationChanged.value || calibrationValidation.value.pass)
-));
+const applyValid = computed(() => responseValid.value && resolverValid.value);
 const canApply = computed(() => (
   connected.value
   && !busy.value
@@ -579,12 +574,12 @@ function setResolver(value) {
   }
 }
 
-function setRoundness({ stickIndex, sector, radiusQ15 }) {
-  const radii = calibrationDraft.value?.stick?.[stickIndex]?.radius_q15;
-  if (!radii || sector < 0 || sector >= radii.length) {
+function setStickShape({ stickIndex, sector, scaleQ15 }) {
+  const scales = profileDraft.value?.stick_shape?.[stickIndex]?.scale_q15;
+  if (!scales || sector < 0 || sector >= scales.length) {
     return;
   }
-  radii[sector] = radiusQ15;
+  scales[sector] = scaleQ15;
 }
 
 function resetCurves(kind) {
@@ -910,7 +905,6 @@ async function applyDraft() {
       };
     }
     if (profileChanged.value) await writeProfile();
-    if (calibrationChanged.value) await writeCalibration();
     profileBackup.value = clone(profileDraft.value);
     await pollAnalogSnapshot();
     notify("Draft applied to firmware RAM.");
@@ -1122,6 +1116,7 @@ function profileResponseSignature(profiles) {
   return profiles.map((profile) => JSON.stringify({
     stick: profile.stick_response,
     trigger: profile.trigger_response,
+    shape: profile.stick_shape,
   })).join("|");
 }
 
