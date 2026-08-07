@@ -11,7 +11,10 @@ test("English remains the canonical fallback and Chinese is registered", () => {
 
 test("source-message placeholders preserve runtime values", () => {
   assert.equal(translate("Slot 4", "zh-CN"), "槽位 4");
-  assert.equal(translate("37/4 returns recorded", "zh-CN"), "已记录 37/4 次回中");
+  assert.equal(
+    translate("3/4 returns recorded · 16/16 ready", "zh-CN"),
+    "已记录 3/4 次回中 · 待采样窗口 16/16",
+  );
   assert.equal(translate("Untranslated firmware status", "zh-CN"), "Untranslated firmware status");
 });
 

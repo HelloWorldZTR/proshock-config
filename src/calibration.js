@@ -14,14 +14,6 @@ export const CENTER_SAMPLE_COUNT = 64;
 export const CENTER_RETURN_SAMPLE_COUNT = 16;
 export const CENTER_NOISE_MAX_COUNTS = 32;
 export const CENTER_NOISE_MAX_RATIO = 0.02;
-export const CENTER_GESTURE_MIN_COUNTS = 768;
-export const CENTER_RELEASE_MAX_COUNTS = 128;
-// Require a quiet 8-sample rolling window before recording a return. If the
-// stick keeps moving for 32 in-range samples, continue and surface a warning
-// instead of trapping the user in calibration.
-export const CENTER_SETTLE_SAMPLE_COUNT = 8;
-export const CENTER_SETTLE_MAX_COUNTS = 16;
-export const CENTER_SETTLE_TIMEOUT_SAMPLES = 32;
 // Direction-dependent spring return is useful diagnostic data, not a reason
 // to reject otherwise valid numeric axis bounds.
 export const CENTER_RETURN_SPREAD_WARNING_COUNTS = 64;
@@ -43,10 +35,10 @@ export const WIZARD_STEPS = [
 ];
 
 export const CENTER_RETURN_DIRECTIONS = Object.freeze([
-  Object.freeze({ id: "top-left", label: "Top left", xSign: -1, ySign: -1 }),
-  Object.freeze({ id: "bottom-right", label: "Bottom right", xSign: 1, ySign: 1 }),
-  Object.freeze({ id: "top-right", label: "Top right", xSign: 1, ySign: -1 }),
-  Object.freeze({ id: "bottom-left", label: "Bottom left", xSign: -1, ySign: 1 }),
+  Object.freeze({ id: "top-left", label: "Top left" }),
+  Object.freeze({ id: "bottom-right", label: "Bottom right" }),
+  Object.freeze({ id: "top-right", label: "Top right" }),
+  Object.freeze({ id: "bottom-left", label: "Bottom left" }),
 ]);
 
 export const CURVE_PRESETS = {
@@ -302,34 +294,24 @@ export function analyzeCenterReturns(returnWindows) {
 }
 
 /**
- * Create the automatic four-corner return-to-center capture tracker.
+ * Create the user-confirmed four-corner return-to-center capture tracker.
  */
-export function createCenterReturnCapture(baselineSnapshots) {
-  const unique = dedupeSnapshots(baselineSnapshots);
-  if (unique.length < CENTER_RETURN_SAMPLE_COUNT) {
-    throw new Error(`Center baseline requires ${CENTER_RETURN_SAMPLE_COUNT} unique samples.`);
-  }
-  const selected = unique.slice(-CENTER_RETURN_SAMPLE_COUNT);
+export function createCenterReturnCapture() {
   return {
-    baseline: AXES.map((_, axisIndex) => (
-      Math.round(median(selected.map((sample) => sample.adc[axisIndex])))
-    )),
     directionIndex: 0,
-    phase: "waiting-deflection",
-    deflectedMask: 0,
-    settleSamples: [],
-    settleElapsedSamples: 0,
-    settleTimeouts: [],
-    captureSamples: [],
+    phase: "waiting-confirmation",
+    recentSamples: [],
     returnWindows: [],
     lastSequence: null,
+    insufficientSamples: false,
   };
 }
 
 /**
- * Advance center capture by one raw ADC snapshot; return true when complete.
+ * Buffer one raw ADC snapshot and capture the preceding sample window only
+ * when the user explicitly confirms it; return true after four returns.
  */
-export function recordCenterReturnSample(capture, sample) {
+export function recordCenterReturnSample(capture, sample, confirmed = false) {
   if (!capture || !sample || capture.lastSequence === sample.sequence) {
     return false;
   }
@@ -339,81 +321,26 @@ export function recordCenterReturnSample(capture, sample) {
     return true;
   }
 
-  if (capture.phase === "waiting-deflection") {
-    for (let stickIndex = 0; stickIndex < 2; stickIndex += 1) {
-      const xIndex = stickIndex * 2;
-      const yIndex = xIndex + 1;
-      const xDisplacement = (
-        sample.adc[xIndex] - capture.baseline[xIndex]
-      ) * calibrationAxisSign(xIndex) * direction.xSign;
-      const yDisplacement = (
-        sample.adc[yIndex] - capture.baseline[yIndex]
-      ) * calibrationAxisSign(yIndex) * direction.ySign;
-      if (
-        xDisplacement >= CENTER_GESTURE_MIN_COUNTS
-        && yDisplacement >= CENTER_GESTURE_MIN_COUNTS
-      ) {
-        capture.deflectedMask |= 1 << stickIndex;
-      }
+  if (confirmed) {
+    if (capture.recentSamples.length < CENTER_RETURN_SAMPLE_COUNT) {
+      capture.insufficientSamples = true;
+      return false;
     }
-    if (capture.deflectedMask === 0x03) {
-      capture.phase = "waiting-release";
-      capture.releaseStableSamples = 0;
-    }
-    return false;
+    capture.returnWindows.push(
+      capture.recentSamples.slice(-CENTER_RETURN_SAMPLE_COUNT),
+    );
+    capture.directionIndex += 1;
+    capture.recentSamples = [];
+    capture.insufficientSamples = false;
+    return capture.directionIndex >= CENTER_RETURN_DIRECTIONS.length;
   }
 
-  const released = AXES.every((_, axisIndex) => (
-    Math.abs(sample.adc[axisIndex] - capture.baseline[axisIndex])
-      <= CENTER_RELEASE_MAX_COUNTS
-  ));
-  if (!released) {
-    capture.settleSamples = [];
-    capture.settleElapsedSamples = 0;
-    capture.captureSamples = [];
-    if (capture.phase === "settling" || capture.phase === "sampling") {
-      capture.phase = "waiting-release";
-    }
-    return false;
+  capture.recentSamples.push(sample);
+  if (capture.recentSamples.length > CENTER_RETURN_SAMPLE_COUNT) {
+    capture.recentSamples = capture.recentSamples.slice(-CENTER_RETURN_SAMPLE_COUNT);
   }
-
-  if (capture.phase === "waiting-release" || capture.phase === "settling") {
-    capture.phase = "settling";
-    capture.settleElapsedSamples += 1;
-    capture.settleSamples.push(sample);
-    if (capture.settleSamples.length > CENTER_SETTLE_SAMPLE_COUNT) {
-      capture.settleSamples = capture.settleSamples.slice(-CENTER_SETTLE_SAMPLE_COUNT);
-    }
-    const stable = capture.settleSamples.length >= CENTER_SETTLE_SAMPLE_COUNT
-      && AXES.every((_, axisIndex) => {
-        const values = capture.settleSamples.map((entry) => entry.adc[axisIndex]);
-        return Math.max(...values) - Math.min(...values) <= CENTER_SETTLE_MAX_COUNTS;
-      });
-    const timedOut = capture.settleElapsedSamples >= CENTER_SETTLE_TIMEOUT_SAMPLES;
-    if (stable || timedOut) {
-      if (!stable) {
-        if (!capture.settleTimeouts.includes(direction.id)) {
-          capture.settleTimeouts.push(direction.id);
-        }
-      }
-      capture.phase = "sampling";
-      capture.captureSamples = [];
-    }
-    return false;
-  }
-
-  capture.captureSamples.push(sample);
-  if (capture.captureSamples.length < CENTER_RETURN_SAMPLE_COUNT) {
-    return false;
-  }
-  capture.returnWindows.push(capture.captureSamples.slice(-CENTER_RETURN_SAMPLE_COUNT));
-  capture.directionIndex += 1;
-  capture.phase = "waiting-deflection";
-  capture.deflectedMask = 0;
-  capture.settleSamples = [];
-  capture.settleElapsedSamples = 0;
-  capture.captureSamples = [];
-  return capture.directionIndex >= CENTER_RETURN_DIRECTIONS.length;
+  capture.insufficientSamples = false;
+  return false;
 }
 
 export function normalizeAxis(raw, calibration, axisIndex) {

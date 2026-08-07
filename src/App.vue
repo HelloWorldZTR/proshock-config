@@ -101,6 +101,10 @@ import { CommandScheduler } from "./services/command-scheduler.js";
 import { createLiveInputSnapshot } from "./live-input.js";
 import { validateResolver } from "./resolver-schema.js";
 import {
+  consumeCalibrationConfirmEdge,
+  createCalibrationConfirmLatch,
+} from "./calibration-controls.js";
+import {
   ANALOG_CALIBRATION_SIZE,
   ANALOG_CALIBRATION_VERSION,
   COMMAND,
@@ -177,6 +181,8 @@ const centerCaptureStatus = ref({
   phase: "idle",
   direction: CENTER_RETURN_DIRECTIONS[0],
   completed: 0,
+  readySamples: 0,
+  insufficientSamples: false,
 });
 const leftRange = ref(null);
 const rightRange = ref(null);
@@ -220,6 +226,8 @@ let centerReturnCapture = null;
 let triggerTimer = null;
 let triggerCycleCapture = null;
 let livePollTimer = null;
+const calibrationConfirmLatch = createCalibrationConfirmLatch();
+let calibrationConfirmActionActive = false;
 let digitalInputCommandSupported = null;
 let pendingNavigation = null;
 let currentRouteHash = "";
@@ -372,14 +380,6 @@ const calibrationChecks = computed(() => {
     });
   }
   if (neutralResult.value) {
-    if (neutralResult.value.settleTimeouts?.length) {
-      checks.push({
-        pass: true,
-        status: "warning",
-        label: "Center settling",
-        detail: `The rolling stability wait timed out after ${neutralResult.value.settleTimeouts.join(" / ")} returns; calibration continued with the recorded windows.`,
-      });
-    }
     neutralResult.value.axes.forEach((axis) => checks.push({
       pass: true,
       status: axis.warning ? "warning" : "pass",
@@ -1162,7 +1162,8 @@ function syncCenterCaptureStatus() {
     direction: CENTER_RETURN_DIRECTIONS[directionIndex]
       || CENTER_RETURN_DIRECTIONS.at(-1),
     completed: centerReturnCapture?.returnWindows.length || 0,
-    deflectedMask: centerReturnCapture?.deflectedMask || 0,
+    readySamples: centerReturnCapture?.recentSamples.length || 0,
+    insufficientSamples: centerReturnCapture?.insufficientSamples || false,
   };
 }
 
@@ -1178,9 +1179,36 @@ function stopCenterTimer(resetStatus = false) {
       phase: "idle",
       direction: CENTER_RETURN_DIRECTIONS[0],
       completed: 0,
-      deflectedMask: 0,
+      readySamples: 0,
+      insufficientSamples: false,
     };
   }
+}
+
+async function handleCalibrationStageConfirm(raw) {
+  const confirmed = consumeCalibrationConfirmEdge(
+    calibrationConfirmLatch,
+    raw?.buttons,
+  );
+  if (
+    !confirmed
+    || page.value !== "calibration"
+    || centerCaptureActive.value
+    || triggerCaptureActive.value
+    || busy.value
+    || calibrationConfirmActionActive
+    || wizardStep.value === "complete"
+  ) {
+    return false;
+  }
+
+  calibrationConfirmActionActive = true;
+  try {
+    await wizardPrimary();
+  } finally {
+    calibrationConfirmActionActive = false;
+  }
+  return true;
 }
 
 function scheduleCenterPoll() {
@@ -1191,21 +1219,26 @@ function scheduleCenterPoll() {
     try {
       if (!client.busy && centerReturnCapture) {
         const raw = await getRaw();
-        const complete = recordCenterReturnSample(centerReturnCapture, raw);
+        const confirmed = consumeCalibrationConfirmEdge(
+          calibrationConfirmLatch,
+          raw.buttons,
+        );
+        const complete = recordCenterReturnSample(
+          centerReturnCapture,
+          raw,
+          confirmed,
+        );
         syncCenterCaptureStatus();
         if (complete) {
           const returnWindows = centerReturnCapture.returnWindows;
-          const settleTimeouts = [...centerReturnCapture.settleTimeouts];
-          neutralResult.value = {
-            ...analyzeCenterReturns(returnWindows),
-            settleTimeouts,
-          };
+          neutralResult.value = analyzeCenterReturns(returnWindows);
           stopCenterTimer();
           centerCaptureStatus.value = {
             phase: "complete",
             direction: CENTER_RETURN_DIRECTIONS.at(-1),
             completed: CENTER_RETURN_DIRECTIONS.length,
-            deflectedMask: 0x03,
+            readySamples: CENTER_RETURN_SAMPLE_COUNT,
+            insufficientSamples: false,
           };
           wizardStep.value = "sticks-range";
           wizardError.value = "";
@@ -1225,23 +1258,15 @@ async function startCenterCapture() {
   neutralResult.value = null;
   centerCaptureActive.value = true;
   centerCaptureStatus.value = {
-    phase: "baseline",
+    phase: "waiting-confirmation",
     direction: CENTER_RETURN_DIRECTIONS[0],
     completed: 0,
-    deflectedMask: 0,
+    readySamples: 0,
+    insufficientSamples: false,
   };
-  try {
-    const baseline = await collectUnique(CENTER_RETURN_SAMPLE_COUNT);
-    if (!centerCaptureActive.value) {
-      return;
-    }
-    centerReturnCapture = createCenterReturnCapture(baseline);
-    syncCenterCaptureStatus();
-    scheduleCenterPoll();
-  } catch (error) {
-    stopCenterTimer();
-    throw error;
-  }
+  centerReturnCapture = createCenterReturnCapture();
+  syncCenterCaptureStatus();
+  scheduleCenterPoll();
 }
 
 function scheduleRangePoll() {
@@ -1267,6 +1292,7 @@ function scheduleRangePoll() {
             ),
           };
         }
+        await handleCalibrationStageConfirm(raw);
       }
     } catch (error) {
       wizardError.value = error.message;
@@ -1323,6 +1349,7 @@ function scheduleTriggerCyclePoll() {
     try {
       if (!client.busy) {
         const raw = await getRaw();
+        consumeCalibrationConfirmEdge(calibrationConfirmLatch, raw.buttons);
         if (
           triggerCaptureActive.value
           && recordTriggerCycleSample(triggerCycleCapture, raw)
@@ -1469,12 +1496,15 @@ async function pollLiveState() {
     || centerCaptureActive.value
     || rangeCaptureActive.value
     || triggerCaptureActive.value
+    || calibrationConfirmActionActive
   ) {
     return;
   }
   try {
-    await getRaw();
-    await pollAnalogSnapshot();
+    const raw = await getRaw();
+    if (!await handleCalibrationStageConfirm(raw)) {
+      await pollAnalogSnapshot();
+    }
   } catch (error) {
     log(error.message);
   }

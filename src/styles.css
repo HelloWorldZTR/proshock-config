@@ -557,6 +557,11 @@ input[type=range] { width: 100%; padding: 0; accent-color: var(--accent); }
 .center-return-directions li small { align-self: start; font: 8px ui-monospace, monospace; text-transform: uppercase; }
 .center-return-directions li.current { border-color: rgba(85,214,255,.45); background: rgba(85,214,255,.055); color: var(--accent); }
 .center-return-directions li.recorded { border-color: rgba(82,227,164,.32); background: rgba(82,227,164,.045); color: var(--success); }
+.center-confirm-note { margin: 0; font-size: 10px; }
+.center-confirm-note.warning { color: var(--warning); }
+.wizard-primary { display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.controller-confirm-buttons { display: inline-flex; align-items: center; gap: 8px; }
+.controller-confirm-buttons img { display: block; width: 20px; height: 20px; object-fit: contain; }
 .coverage-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .coverage-block { display: grid; gap: 8px; }
 .coverage-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }

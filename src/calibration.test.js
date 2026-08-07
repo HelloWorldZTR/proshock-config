@@ -21,8 +21,6 @@ import {
   curvePresetToQ15,
   createCenterReturnCapture,
   createTriggerCycleCapture,
-  CENTER_SETTLE_SAMPLE_COUNT,
-  CENTER_SETTLE_TIMEOUT_SAMPLES,
   nextWizardStep,
   normalizeAxis,
   recordCenterReturnSample,
@@ -70,35 +68,21 @@ test("neutral uses 64 unique snapshots and rejects duplicates", () => {
   assert.ok(result.axes.every((axis) => axis.pass));
 });
 
-test("center capture requires four diagonal deflections and return windows", () => {
+test("center capture advances only when the user confirms each return", () => {
   let sequence = 0;
   const center = [2048, 2048, 2052, 2044, 200, 200];
-  const baseline = Array.from({ length: 16 }, () => (
-    snapshot(sequence++, [...center])
-  ));
-  const capture = createCenterReturnCapture(baseline);
+  const capture = createCenterReturnCapture();
   const directions = [
     [500, 500, 500, 500, 200, 200],
     [3600, 3600, 3600, 3600, 200, 200],
     [3600, 500, 3600, 500, 200, 200],
     [500, 3600, 500, 3600, 200, 200],
   ];
-  assert.equal(recordCenterReturnSample(
-    capture,
-    snapshot(sequence++, [500, 2048, 500, 2044, 200, 200]),
-  ), false);
-  assert.equal(capture.phase, "waiting-deflection");
   directions.forEach((deflected, directionIndex) => {
     assert.equal(recordCenterReturnSample(
       capture,
       snapshot(sequence++, deflected),
     ), false);
-    for (let stableIndex = 0; stableIndex < CENTER_SETTLE_SAMPLE_COUNT; stableIndex += 1) {
-      assert.equal(recordCenterReturnSample(
-        capture,
-        snapshot(sequence++, [...center]),
-      ), false);
-    }
     for (let sampleIndex = 0; sampleIndex < 16; sampleIndex += 1) {
       const returned = center.map((value, axisIndex) => (
         axisIndex < 4 ? value + (directionIndex + sampleIndex) % 3 - 1 : value
@@ -107,8 +91,16 @@ test("center capture requires four diagonal deflections and return windows", () 
         capture,
         snapshot(sequence++, returned),
       );
-      assert.equal(complete, directionIndex === 3 && sampleIndex === 15);
+      assert.equal(complete, false);
     }
+    assert.equal(capture.directionIndex, directionIndex);
+    const complete = recordCenterReturnSample(
+      capture,
+      snapshot(sequence++, [...center]),
+      true,
+    );
+    assert.equal(complete, directionIndex === 3);
+    assert.equal(capture.directionIndex, directionIndex + 1);
   });
   const result = analyzeCenterReturns(capture.returnWindows);
   assert.equal(result.returns.length, 4);
@@ -134,48 +126,38 @@ test("stable direction-dependent centers warn without blocking calibration", () 
   assert.deepEqual(result.axes.map((axis) => axis.center), [2060, 2060, 2060, 2060]);
 });
 
-test("center capture waits for rolling stability and falls through on timeout", () => {
+test("manual center confirmation requires a complete pre-press sample window", () => {
   let sequence = 0;
   const center = [2048, 2048, 2048, 2048, 200, 200];
-  const baseline = Array.from({ length: 16 }, () => snapshot(sequence++, [...center]));
-  const capture = createCenterReturnCapture(baseline);
-  recordCenterReturnSample(
+  const capture = createCenterReturnCapture();
+  for (let index = 0; index < 8; index += 1) {
+    recordCenterReturnSample(
+      capture,
+      snapshot(sequence++, [...center]),
+    );
+  }
+  assert.equal(recordCenterReturnSample(
     capture,
-    snapshot(sequence++, [500, 500, 500, 500, 200, 200]),
-  );
+    snapshot(sequence++, [...center]),
+    true,
+  ), false);
+  assert.equal(capture.directionIndex, 0);
+  assert.equal(capture.insufficientSamples, true);
 
-  for (let index = 0; index < CENTER_SETTLE_SAMPLE_COUNT; index += 1) {
-    const offset = -100 + index * 20;
+  for (let index = 0; index < 16; index += 1) {
     recordCenterReturnSample(
       capture,
-      snapshot(sequence++, [2048 + offset, 2048 + offset, 2048 + offset, 2048 + offset, 200, 200]),
+      snapshot(sequence++, [...center]),
     );
   }
-  assert.equal(capture.phase, "settling");
-
-  for (let index = 0; index < CENTER_SETTLE_SAMPLE_COUNT; index += 1) {
-    recordCenterReturnSample(
-      capture,
-      snapshot(sequence++, [2060, 2060, 2060, 2060, 200, 200]),
-    );
-  }
-  assert.equal(capture.phase, "sampling");
-  assert.deepEqual(capture.settleTimeouts, []);
-
-  const timeoutCapture = createCenterReturnCapture(baseline);
-  recordCenterReturnSample(
-    timeoutCapture,
-    snapshot(sequence++, [500, 500, 500, 500, 200, 200]),
-  );
-  for (let index = 0; index < CENTER_SETTLE_TIMEOUT_SAMPLES; index += 1) {
-    const offset = index % 2 ? -100 : 100;
-    recordCenterReturnSample(
-      timeoutCapture,
-      snapshot(sequence++, [2048 + offset, 2048 + offset, 2048 + offset, 2048 + offset, 200, 200]),
-    );
-  }
-  assert.equal(timeoutCapture.phase, "sampling");
-  assert.deepEqual(timeoutCapture.settleTimeouts, ["top-left"]);
+  assert.equal(capture.directionIndex, 0);
+  assert.equal(recordCenterReturnSample(
+    capture,
+    snapshot(sequence++, [...center]),
+    true,
+  ), false);
+  assert.equal(capture.directionIndex, 1);
+  assert.equal(capture.insufficientSamples, false);
 });
 
 test("temporary calibration polarity matches the prototype firmware", () => {

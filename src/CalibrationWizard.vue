@@ -21,7 +21,7 @@
     >
       <div class="center-return-status">
         <strong>{{ centerStatusLabel }}</strong>
-        <span>{{ centerCaptureStatus?.completed || 0 }}/4 returns recorded</span>
+        <span>{{ centerCaptureStatus?.completed || 0 }}/4 returns recorded · {{ centerCaptureStatus?.readySamples || 0 }}/16 ready</span>
       </div>
       <ol class="center-return-directions" aria-label="Center return directions">
         <li
@@ -34,6 +34,9 @@
           <small>{{ centerDirectionState(index) }}</small>
         </li>
       </ol>
+      <p v-if="centerCaptureStatus?.insufficientSamples" class="center-confirm-note warning">
+        Keep the sticks released briefly, then confirm again.
+      </p>
     </div>
     <div v-if="step === 'neutral' && neutralResult" class="calibration-summary">
       <div v-for="axis in neutralResult.axes" :key="axis.name" class="metric">
@@ -60,8 +63,16 @@
     <footer class="wizard-actions">
       <button type="button" :disabled="busy || stepNumber <= 1 || step === 'save'" @click="$emit('back')">Back</button>
       <button type="button" :disabled="busy" @click="$emit('cancel')">Cancel</button>
-      <button type="button" class="primary" :disabled="busy || primaryDisabled" @click="$emit('primary')">
-        {{ busy ? "Working…" : primaryLabel }}
+      <button type="button" class="primary wizard-primary" :disabled="busy || primaryDisabled" @click="$emit('primary')">
+        <span>{{ busy ? "Working…" : primaryLabel }}</span>
+        <span
+          v-if="showControllerConfirmIcons"
+          class="controller-confirm-buttons"
+          aria-label="Cross or Circle button"
+        >
+          <img :src="crossIcon" alt="Cross button">
+          <img :src="circleIcon" alt="Circle button">
+        </span>
       </button>
     </footer>
   </section>
@@ -70,6 +81,8 @@
 <script setup>
 import { computed } from "vue";
 import { CENTER_RETURN_DIRECTIONS, WIZARD_STEPS } from "./calibration.js";
+import crossIcon from "./assets/PlayStation_button_X.svg";
+import circleIcon from "./assets/PlayStation_button_C.svg";
 
 const props = defineProps({
   step: { type: String, required: true },
@@ -110,17 +123,19 @@ const centerStatusLabel = computed(() => {
   }
   const direction = props.centerCaptureStatus?.direction?.label || "Top left";
   return {
-    baseline: "Keep both sticks released while the starting center is checked",
-    "waiting-deflection": `Push both sticks fully ${direction}`,
-    "waiting-release": "Now release both sticks",
-    settling: "Hands off — waiting for both sticks to settle",
-    sampling: `Hands off — recording the ${direction} return`,
+    "waiting-confirmation": `Push both sticks fully ${direction}, release them, then confirm when centered`,
     complete: "Four center returns recorded",
-  }[props.centerCaptureStatus?.phase] || `Push both sticks fully ${direction}`;
+  }[props.centerCaptureStatus?.phase]
+    || `Push both sticks fully ${direction}, release them, then confirm when centered`;
 });
 
+const showControllerConfirmIcons = computed(() => (
+  props.step !== "complete"
+  && !(props.step === "triggers-pressed" && props.triggerCaptureActive)
+));
+
 const copy = {
-  neutral: ["Four-corner center return", "Push both sticks through four opposing corners, then measure where they settle after each release."],
+  neutral: ["Four-corner center return", "For each shown direction, push both sticks fully, release them, wait for the center you want, then confirm from the controller."],
   "sticks-range": ["Both stick ranges and roundness", "Sampling has started. Rotate both sticks around their outer gates until both coverage grids are complete, then continue once."],
   "triggers-released": ["Trigger released points", "Leave L2 and R2 completely released while a stable window is sampled."],
   "triggers-pressed": ["Trigger press/release cycles", "Detection has started. Press L2 and R2 fully, then release both; repeat five times. No extra clicks are needed."],
