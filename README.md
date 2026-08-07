@@ -3,6 +3,14 @@
 ProShock 4 的浏览器 WebHID 配置工具。它通过固定 64 字节 WebHID
 数据包配置手柄 profile、摇杆与扳机校准、输入映射及轮询率。
 
+固件平时只暴露 DS4 手柄 interface。点击连接后，Portal 会通过 Feature Report
+`0xF0` 让手柄临时重枚举到 Configuration Mode，再连接 WebHID interface。Portal
+每秒续租；关闭页面、浏览器异常或心跳中断时，固件会自动回到 Gaming Mode。
+
+Configuration Mode 下手柄输入仍会继续，但同时进游戏可能导致断联、识别错误，并会
+略微影响性能。完成配置后应点击 **Exit configuration mode**，恢复纯 DS4 descriptor
+后再进入游戏测试。
+
 在线页面：<https://helloworldztr.github.io/proshock-config/>
 
 WebHID 需要安全上下文和 Chromium 系浏览器。在线页面使用 HTTPS；本地开发请通过

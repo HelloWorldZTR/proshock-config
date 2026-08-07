@@ -1,6 +1,12 @@
 <template>
   <main class="app-shell">
     <div v-if="showSecureNote" class="secure-warning">WebHID requires HTTPS or localhost.</div>
+    <div v-if="connected" class="config-mode-warning" role="alert">
+      <span>Configuration mode is active. Using the controller in a game may cause disconnects, detection errors, and slightly reduce performance. Exit configuration mode before testing in a game.</span>
+      <button type="button" :disabled="busy || exitingConfig" @click="requestExitConfig">
+        {{ exitingConfig ? "Exiting…" : "Exit configuration mode" }}
+      </button>
+    </div>
     <AppHeader
       :profiles="profileCards"
       :active="configInfo?.active_profile ?? selectedProfile"
@@ -67,10 +73,12 @@
       :can-discard="canDiscardAndLeave"
       :discard-reason="discardReason"
       :error="leaveGuardError"
+      :session-exit="leaveGuardIsSessionExit"
       @stay="closeLeaveGuard"
       @apply="applyFromLeaveGuard"
       @save="saveFromLeaveGuard"
       @discard="discardFromLeaveGuard"
+      @keep-ram="keepRamFromLeaveGuard"
     />
     <input ref="profileFileInput" class="visually-hidden" type="file" accept=".json,.proshock-profile.json" @change="importProfileFile">
     <div v-if="toast" class="toast" role="status">{{ toast }}</div>
@@ -162,6 +170,7 @@ const showSecureNote = !window.isSecureContext || location.protocol === "file:";
 const connected = ref(false);
 const busy = ref(false);
 const saveInProgress = ref(false);
+const exitingConfig = ref(false);
 const deviceLabel = ref("Disconnected");
 const configInfo = ref(null);
 const lastStatus = ref(null);
@@ -216,6 +225,7 @@ const savedBaselineAvailable = ref(false);
 const leaveGuardOpen = ref(false);
 const leaveGuardBusy = ref(false);
 const leaveGuardError = ref("");
+const leaveGuardIsSessionExit = ref(false);
 const leaveGuardReturnFocus = ref(null);
 const defaultCalibration = createDefaultAnalogCalibration();
 const rawNames = ["LX", "LY", "RX", "RY", "L2", "R2"];
@@ -227,6 +237,9 @@ let centerReturnCapture = null;
 let triggerTimer = null;
 let triggerCycleCapture = null;
 let livePollTimer = null;
+let keepAliveTimer = null;
+let keepAliveQueued = false;
+let exitRequested = false;
 const calibrationConfirmLatch = createCalibrationConfirmLatch();
 let calibrationConfirmActionActive = false;
 let digitalInputCommandSupported = null;
@@ -815,7 +828,9 @@ async function connectFlow() {
     }
     digitalInputCommandSupported = null;
     connected.value = true;
-    deviceLabel.value = `${device.productName || "ProShock 4"} connected`;
+    deviceLabel.value = `${device.productName || "ProShock 4"} · Configuration Mode`;
+    await sendKeepAlive();
+    startKeepAlive();
     if (hasUnsaved.value && configInfo.value) {
       notify("Controller reconnected. Unsaved work was preserved.");
     } else {
@@ -823,10 +838,93 @@ async function connectFlow() {
     }
     startSnapshotPolling();
   } catch (error) {
+    stopSessionTimers();
+    connected.value = false;
     log(error.message);
+    notify(error.message);
   } finally {
     busy.value = false;
   }
+}
+
+async function sendKeepAlive() {
+  if (!connected.value || keepAliveQueued || exitingConfig.value) {
+    return;
+  }
+  keepAliveQueued = true;
+  try {
+    const packet = await scheduler.enqueue(
+      () => client.sendCommand(COMMAND.KEEP_ALIVE),
+      0,
+    );
+    expectOk(packet, "configuration keep-alive");
+  } catch (error) {
+    log(error.message);
+    stopKeepAlive();
+  } finally {
+    keepAliveQueued = false;
+  }
+}
+
+function startKeepAlive() {
+  if (!keepAliveTimer) {
+    keepAliveTimer = window.setInterval(() => {
+      void sendKeepAlive();
+    }, 1000);
+  }
+}
+
+function stopKeepAlive() {
+  if (keepAliveTimer) {
+    window.clearInterval(keepAliveTimer);
+    keepAliveTimer = null;
+  }
+  keepAliveQueued = false;
+}
+
+function stopSessionTimers() {
+  stopKeepAlive();
+  if (livePollTimer) {
+    window.clearInterval(livePollTimer);
+    livePollTimer = null;
+  }
+}
+
+async function exitConfigSession() {
+  if (!connected.value || exitingConfig.value) return;
+  exitingConfig.value = true;
+  exitRequested = true;
+  stopSessionTimers();
+  try {
+    const packet = await command(COMMAND.EXIT_CONFIG);
+    expectOk(packet, "exit configuration mode");
+    notify("Gaming Mode restored. The controller is ready for game testing.");
+  } catch (error) {
+    log(error.message);
+    notify("The session is closing. Firmware timeout will restore Gaming Mode automatically.");
+  } finally {
+    connected.value = false;
+    deviceLabel.value = "Gaming Mode";
+    try {
+      await client.close();
+    } catch (error) {
+      log(error.message);
+    }
+    exitRequested = false;
+    exitingConfig.value = false;
+  }
+}
+
+function requestExitConfig() {
+  if (!hasUnsaved.value) {
+    void exitConfigSession();
+    return;
+  }
+  pendingNavigation = exitConfigSession;
+  leaveGuardIsSessionExit.value = true;
+  leaveGuardError.value = "";
+  leaveGuardReturnFocus.value = document.activeElement;
+  leaveGuardOpen.value = true;
 }
 
 async function refreshAll() {
@@ -1052,6 +1150,7 @@ function closeLeaveGuard(restoreFocus = true) {
   leaveGuardBusy.value = false;
   leaveGuardError.value = "";
   pendingNavigation = null;
+  leaveGuardIsSessionExit.value = false;
   if (restoreFocus) {
     const target = leaveGuardReturnFocus.value;
     void nextTick(() => target?.focus?.());
@@ -1072,10 +1171,16 @@ async function applyFromLeaveGuard() {
   const applied = await applyDraft();
   leaveGuardBusy.value = false;
   if (applied) {
-    closeLeaveGuard();
+    if (!leaveGuardIsSessionExit.value) {
+      closeLeaveGuard();
+    }
   } else {
     leaveGuardError.value = "Apply failed. Resolve the error before leaving.";
   }
+}
+
+async function keepRamFromLeaveGuard() {
+  await finishPendingNavigation();
 }
 
 async function saveFromLeaveGuard() {
@@ -1105,11 +1210,20 @@ async function discardFromLeaveGuard() {
 }
 
 function handleBeforeUnload(event) {
+  if (connected.value) {
+    client.sendBestEffortExit();
+  }
   if (!hasUnsaved.value) {
     return;
   }
   event.preventDefault();
   event.returnValue = "";
+}
+
+function handlePageHide() {
+  if (connected.value) {
+    client.sendBestEffortExit();
+  }
 }
 
 function profileResponseSignature(profiles) {
@@ -1546,16 +1660,18 @@ function handleHidDisconnect(event) {
   if (event.device !== client.device) {
     return;
   }
-  connected.value = false;
-  deviceLabel.value = "Disconnected";
-  stopCenterTimer();
-  if (livePollTimer) {
-    window.clearInterval(livePollTimer);
-    livePollTimer = null;
+  if (client.transitioning) {
+    return;
   }
-  notify(hasUnsaved.value
-    ? "Controller disconnected. Unsaved work was preserved."
-    : "Controller disconnected.");
+  connected.value = false;
+  deviceLabel.value = exitRequested ? "Gaming Mode" : "Configuration session ended";
+  stopCenterTimer();
+  stopSessionTimers();
+  if (!exitRequested) {
+    notify(hasUnsaved.value
+      ? "Configuration session ended. Unsaved work was preserved; firmware returns to Gaming Mode automatically."
+      : "Configuration session ended. Firmware returns to Gaming Mode automatically.");
+  }
 }
 
 onMounted(async () => {
@@ -1565,18 +1681,18 @@ onMounted(async () => {
   await performParsedRoute(initialRoute);
   window.addEventListener("hashchange", handleHashChange);
   window.addEventListener("beforeunload", handleBeforeUnload);
+  window.addEventListener("pagehide", handlePageHide);
   navigator.hid?.addEventListener("disconnect", handleHidDisconnect);
 });
 
 onUnmounted(() => {
   window.removeEventListener("hashchange", handleHashChange);
   window.removeEventListener("beforeunload", handleBeforeUnload);
+  window.removeEventListener("pagehide", handlePageHide);
   navigator.hid?.removeEventListener("disconnect", handleHidDisconnect);
   stopCenterTimer();
   stopRangeTimer();
   stopTriggerTimer();
-  if (livePollTimer) {
-    window.clearInterval(livePollTimer);
-  }
+  stopSessionTimers();
 });
 </script>

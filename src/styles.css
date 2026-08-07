@@ -39,6 +39,9 @@ p { color: var(--secondary); line-height: 1.55; }
 label { display: grid; gap: 8px; color: var(--secondary); font-size: 13px; }
 .app-shell { min-height: 100vh; }
 .secure-warning { padding: 7px 20px; background: #4b3410; color: #ffd98c; text-align: center; font-size: 12px; }
+.config-mode-warning { display: flex; align-items: center; justify-content: center; gap: 18px; padding: 9px 20px; border-bottom: 1px solid rgba(242,184,75,.28); background: rgba(75,52,16,.92); color: #ffd98c; font-size: 11px; line-height: 1.45; }
+.config-mode-warning span { max-width: 920px; }
+.config-mode-warning button { flex: none; border-color: rgba(255,217,140,.4); color: #ffd98c; }
 
 .app-header { height: 52px; display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) minmax(120px, 180px); align-items: center; gap: 16px; padding: 0 max(18px, calc((100vw - 1600px)/2)); border-bottom: 1px solid var(--border); background: rgba(7,9,12,.96); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 30; }
 .profile-quick-switch { justify-self: start; position: relative; }
