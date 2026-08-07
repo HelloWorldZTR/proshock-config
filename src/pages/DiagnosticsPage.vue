@@ -4,7 +4,7 @@
       <button v-for="item in tabs" :key="item.id" :class="{ active: section === item.id }" @click="$emit('section', item.id)">{{ item.label }}</button>
     </nav>
     <div v-if="section === 'input'" class="diagnostic-input">
-      <InputViewer :raw="raw" :snapshot="snapshot" :calibration="calibration" mode="diagnostic" title="Input monitor" />
+      <InputViewer :raw="raw" :snapshot="snapshot" :calibration="calibration" :axis-invert="configInfo?.axis_invert" mode="diagnostic" title="Input monitor" />
       <AxisTable :raw="raw" :snapshot="snapshot" />
     </div>
     <section v-else-if="section === 'poll'" class="form-section">

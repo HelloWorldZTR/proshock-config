@@ -29,7 +29,7 @@ import {
   validateResponse,
 } from "./calibration.js";
 import { cloneConfigData } from "./clone-data.js";
-import { TEMPORARY_CALIBRATION_AXIS_INVERT } from "./calibration-polarity.js";
+import { LEGACY_CALIBRATION_AXIS_INVERT } from "./calibration-polarity.js";
 
 function snapshot(sequence, adc) {
   return { sequence, adc };
@@ -160,7 +160,7 @@ test("manual center confirmation requires a complete pre-press sample window", (
   assert.equal(capture.insufficientSamples, false);
 });
 
-test("temporary calibration polarity matches the prototype firmware", () => {
+test("calibration polarity supports legacy and firmware-provided flips", () => {
   const calibration = {
     raw_min: 0,
     raw_center: 2048,
@@ -168,13 +168,15 @@ test("temporary calibration polarity matches the prototype firmware", () => {
   };
 
   assert.deepEqual(
-    [...TEMPORARY_CALIBRATION_AXIS_INVERT],
+    [...LEGACY_CALIBRATION_AXIS_INVERT],
     [false, false, false, false],
   );
   assert.ok(normalizeAxis(1024, calibration, 1) < 0);
   assert.ok(normalizeAxis(3072, calibration, 1) > 0);
   assert.ok(normalizeAxis(1024, calibration, 3) < 0);
   assert.ok(normalizeAxis(3072, calibration, 3) > 0);
+  assert.ok(normalizeAxis(1024, calibration, 1, [false, true, false, true]) > 0);
+  assert.ok(normalizeAxis(3072, calibration, 1, [false, true, false, true]) < 0);
 });
 
 test("stick range produces complete 16-sector roundness", () => {
@@ -206,7 +208,7 @@ test("stick range produces complete 16-sector roundness", () => {
   assert.ok(result.radius_q15.every((radius) => radius >= 27852 && radius <= 49151));
 });
 
-test("temporary polarity keeps roundness sectors aligned with firmware coordinates", () => {
+test("legacy polarity keeps roundness sectors aligned with firmware coordinates", () => {
   const neutral = {
     axes: Array.from({ length: 4 }, (_, index) => ({
       name: ["LX", "LY", "RX", "RY"][index],

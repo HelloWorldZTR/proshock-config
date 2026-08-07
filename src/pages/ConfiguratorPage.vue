@@ -50,6 +50,7 @@
         :raw="raw"
         :snapshot="snapshot"
         :calibration="calibration"
+        :axis-invert="configInfo?.axis_invert"
         :detail-kind="section === 'sticks' ? 'sticks' : 'triggers'"
         mode="compact"
         title="Live preview"

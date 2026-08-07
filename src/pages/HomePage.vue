@@ -20,6 +20,7 @@
         :raw="raw"
         :snapshot="snapshot"
         :calibration="calibration"
+        :axis-invert="configInfo?.axis_invert"
         mode="large"
       />
       <AxisTable :raw="raw" :snapshot="snapshot" />

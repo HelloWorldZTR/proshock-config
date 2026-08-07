@@ -76,7 +76,8 @@ export const PROFILE_COUNT = 4;
 export const ANALOG_CALIBRATION_SIZE = 116;
 export const ANALOG_SNAPSHOT_SIZE = 52;
 export const STATUS_SIZE = 16;
-export const CONFIG_INFO_SIZE = 52;
+export const LEGACY_CONFIG_INFO_SIZE = 52;
+export const CONFIG_INFO_SIZE = 56;
 export const RAW_SIZE = 20;
 export const DIGITAL_INPUT_SIZE = 8;
 export const PROTOCOL_VERSION = 1;
@@ -100,6 +101,10 @@ import {
   parseResolver,
   writeResolver,
 } from "./resolver-schema.js";
+import {
+  LEGACY_CALIBRATION_AXIS_INVERT,
+  calibrationAxisInvertFromMask,
+} from "./calibration-polarity.js";
 
 export function encodePacket(command, payload = new Uint8Array()) {
   if (payload.byteLength > PAYLOAD_SIZE) {
@@ -338,10 +343,16 @@ export function writeAnalogCalibrationToPayload(payload, calibration) {
 }
 
 export function parseConfigInfo(payload) {
-  if (payload.byteLength !== CONFIG_INFO_SIZE) {
+  if (
+    payload.byteLength !== LEGACY_CONFIG_INFO_SIZE
+    && payload.byteLength !== CONFIG_INFO_SIZE
+  ) {
     throw new Error(`Unexpected config info size: ${payload.byteLength}`);
   }
   const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  const axisInvert = payload.byteLength >= CONFIG_INFO_SIZE
+    ? calibrationAxisInvertFromMask(payload[52])
+    : [...LEGACY_CALIBRATION_AXIS_INVERT];
   return {
     schema_version: view.getUint16(0, true),
     profile_size: view.getUint16(2, true),
@@ -360,6 +371,8 @@ export function parseConfigInfo(payload) {
     sequence: view.getUint32(16, true),
     pollrate_hz: view.getUint32(20, true),
     feature_flags: view.getUint32(24, true),
+    axis_invert_mask: payload.byteLength >= CONFIG_INFO_SIZE ? payload[52] & 0x0f : null,
+    axis_invert: axisInvert,
     profiles: Array.from({ length: PROFILE_COUNT }, (_, index) => {
       const offset = 28 + index * 6;
       return {

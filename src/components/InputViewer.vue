@@ -51,6 +51,7 @@ const props = defineProps({
   raw: { type: Object, default: null },
   snapshot: { type: Object, default: null },
   calibration: { type: Object, required: true },
+  axisInvert: { type: Array, default: undefined },
   viewerHz: { type: Number, default: 20 },
   sourceLabel: { type: String, default: "Processed input" },
   detailKind: { type: String, default: "" },
@@ -68,7 +69,7 @@ const rawStickValues = computed(() => {
   const adc = props.raw?.adc;
   if (!adc || adc.length < 4) return [0, 0, 0, 0];
   return adc.slice(0, 4).map((value, index) => (
-    normalizeAxis(value, props.calibration.axis[index], index)
+    normalizeAxis(value, props.calibration.axis[index], index, props.axisInvert)
   ));
 });
 const rawTriggerValues = computed(() => {

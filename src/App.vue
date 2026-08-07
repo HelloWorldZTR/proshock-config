@@ -1408,11 +1408,13 @@ function scheduleRangePoll() {
               rangeSamples.value,
               0,
               neutralResult.value,
+              configInfo.value?.axis_invert,
             ),
             rightSectorCounts: estimateStickCoverage(
               rangeSamples.value,
               1,
               neutralResult.value,
+              configInfo.value?.axis_invert,
             ),
           };
         }
@@ -1502,8 +1504,18 @@ function startTriggerCycleCapture() {
 
 async function finishRangeCapture() {
   try {
-    const nextLeftRange = analyzeStickRange(rangeSamples.value, 0, neutralResult.value);
-    const nextRightRange = analyzeStickRange(rangeSamples.value, 1, neutralResult.value);
+    const nextLeftRange = analyzeStickRange(
+      rangeSamples.value,
+      0,
+      neutralResult.value,
+      configInfo.value?.axis_invert,
+    );
+    const nextRightRange = analyzeStickRange(
+      rangeSamples.value,
+      1,
+      neutralResult.value,
+      configInfo.value?.axis_invert,
+    );
     leftRange.value = nextLeftRange;
     rightRange.value = nextRightRange;
     stopRangeTimer();

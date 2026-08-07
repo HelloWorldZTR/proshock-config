@@ -343,7 +343,7 @@ export function recordCenterReturnSample(capture, sample, confirmed = false) {
   return false;
 }
 
-export function normalizeAxis(raw, calibration, axisIndex) {
+export function normalizeAxis(raw, calibration, axisIndex, axisInvert) {
   let normalized;
   if (raw < calibration.raw_center) {
     normalized = -(calibration.raw_center - raw)
@@ -353,12 +353,17 @@ export function normalizeAxis(raw, calibration, axisIndex) {
       / (calibration.raw_max - calibration.raw_center);
   }
   normalized = Math.max(-1, Math.min(1, normalized));
-  return normalized * calibrationAxisSign(axisIndex);
+  return normalized * calibrationAxisSign(axisIndex, axisInvert);
 }
 
-export function normalizedAxis(raw, calibration) {
+export function normalizedAxis(raw, calibration, axisInvert) {
   const axisIndex = AXES.indexOf(calibration?.name);
-  return normalizeAxis(raw, calibration, axisIndex < 0 ? 0 : axisIndex);
+  return normalizeAxis(
+    raw,
+    calibration,
+    axisIndex < 0 ? 0 : axisIndex,
+    axisInvert,
+  );
 }
 
 export function normalizedTrigger(raw, calibration) {
@@ -369,7 +374,12 @@ export function normalizedTrigger(raw, calibration) {
   return Math.max(0, Math.min(1, (raw - calibration.raw_released) / span));
 }
 
-export function analyzeStickRange(snapshots, stickIndex, neutralResult) {
+export function analyzeStickRange(
+  snapshots,
+  stickIndex,
+  neutralResult,
+  axisInvert,
+) {
   const unique = dedupeSnapshots(snapshots);
   if (unique.length > RANGE_SAMPLE_LIMIT) {
     throw new Error(`Range capture exceeded ${RANGE_SAMPLE_LIMIT} samples; retry the stick.`);
@@ -405,8 +415,8 @@ export function analyzeStickRange(snapshots, stickIndex, neutralResult) {
 
   const sectors = Array.from({ length: ROUNDNESS_SECTOR_COUNT }, () => []);
   unique.forEach((sample) => {
-    const x = normalizeAxis(sample.adc[xIndex], axis[0], xIndex);
-    const y = normalizeAxis(sample.adc[yIndex], axis[1], yIndex);
+    const x = normalizeAxis(sample.adc[xIndex], axis[0], xIndex, axisInvert);
+    const y = normalizeAxis(sample.adc[yIndex], axis[1], yIndex, axisInvert);
     const radius = Math.hypot(x, y);
     if (radius < RIM_MIN_RADIUS) {
       return;
@@ -448,7 +458,12 @@ export function analyzeStickRange(snapshots, stickIndex, neutralResult) {
   };
 }
 
-export function estimateStickCoverage(snapshots, stickIndex, neutralResult) {
+export function estimateStickCoverage(
+  snapshots,
+  stickIndex,
+  neutralResult,
+  axisInvert,
+) {
   const counts = Array(ROUNDNESS_SECTOR_COUNT).fill(0);
   const unique = dedupeSnapshots(snapshots);
   if (unique.length < 8 || !neutralResult) {
@@ -467,8 +482,12 @@ export function estimateStickCoverage(snapshots, stickIndex, neutralResult) {
     };
   });
   unique.forEach((sample) => {
-    const x = normalizeAxis(sample.adc[xIndex], calibration[0], xIndex);
-    const y = normalizeAxis(sample.adc[yIndex], calibration[1], yIndex);
+    const x = normalizeAxis(
+      sample.adc[xIndex], calibration[0], xIndex, axisInvert,
+    );
+    const y = normalizeAxis(
+      sample.adc[yIndex], calibration[1], yIndex, axisInvert,
+    );
     if (Math.hypot(x, y) < RIM_MIN_RADIUS) {
       return;
     }

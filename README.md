@@ -45,12 +45,11 @@ npm run build
   Q1.15 原始值。它与快速校准生成的物理边界分开保存，并在固件 axis flip 后按
   同一扇区坐标应用；修改后仍需依次 `Apply`、`Save`。
 
-## 临时原型板极性
+## 摇杆轴极性
 
-当前原型 PCB 的两个 Y 轴电路方向与后续产品设计相反。前端通过
-`src/calibration-polarity.js` 中的临时轴极性配置，使四角回中识别、圆度分区和
-raw preview 与当前固件保持一致。量产 PCB 修正后，应按文件中的 TODO 将 LY/RY
-恢复为反转状态。
+新固件在 `GET_CONFIG_INFO` 末尾返回四个摇杆轴的 flip 位，前端据此统一四角回中、
+圆度分区和 raw preview 的坐标方向。为兼容尚未提供该字段的旧原型固件，52 字节旧
+响应仍按四轴均不 flip 处理；新响应为 56 字节，位 0..3 依次表示 LX、LY、RX、RY。
 
 界面使用的 DualShock 图形资源及其授权信息见
 [`src/assets/dualshock-tools-LICENSE.txt`](src/assets/dualshock-tools-LICENSE.txt)。
