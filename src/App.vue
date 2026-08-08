@@ -114,6 +114,10 @@ import {
 } from "./services/import-export.js";
 import { CommandScheduler } from "./services/command-scheduler.js";
 import { createLiveInputSnapshot } from "./live-input.js";
+import {
+  createGamepadPreviewSnapshot,
+  isProShockPreviewGamepad,
+} from "./gamepad-preview.js";
 import { validateResolver } from "./resolver-schema.js";
 import {
   consumeCalibrationConfirmEdge,
@@ -141,7 +145,6 @@ import {
   parseAnalogCalibration,
   parseAnalogSnapshot,
   parseConfigInfo,
-  parseDs4InputReport,
   parseDigitalInput,
   parseProfile,
   parseProfileChunk,
@@ -243,10 +246,9 @@ let centerTimer = null;
 let centerReturnCapture = null;
 let triggerTimer = null;
 let triggerCycleCapture = null;
-let gamepadInputDevice = null;
-let gamepadInputSequence = 0;
-let pendingGamepadInput = null;
-let gamepadInputFrame = 0;
+let gamepadPreviewFrame = 0;
+let gamepadPreviewIndex = null;
+let gamepadPreviewSequence = 0;
 const calibrationConfirmLatch = createCalibrationConfirmLatch();
 let calibrationConfirmActionActive = false;
 let digitalInputCommandSupported = null;
@@ -870,15 +872,11 @@ async function connectFlow() {
 }
 
 function stopSessionTimers() {
-  if (gamepadInputDevice) {
-    gamepadInputDevice.removeEventListener("inputreport", handleGamepadInputReport);
-    gamepadInputDevice = null;
+  if (gamepadPreviewFrame) {
+    window.cancelAnimationFrame(gamepadPreviewFrame);
+    gamepadPreviewFrame = 0;
   }
-  if (gamepadInputFrame) {
-    window.cancelAnimationFrame(gamepadInputFrame);
-    gamepadInputFrame = 0;
-  }
-  pendingGamepadInput = null;
+  gamepadPreviewIndex = null;
 }
 
 async function disconnectDevice() {
@@ -1599,49 +1597,47 @@ async function pollAnalogSnapshot(syncRaw = false) {
   }
 }
 
-function handleGamepadInputReport(event) {
-  if (event.device !== client.device || event.reportId !== 0x01) {
-    return;
+function findPreviewGamepad() {
+  const gamepads = Array.from(navigator.getGamepads?.() || []).filter(Boolean);
+  if (gamepadPreviewIndex !== null) {
+    const current = gamepads.find((gamepad) => (
+      gamepad.index === gamepadPreviewIndex && gamepad.connected
+    ));
+    if (current) return current;
   }
-  pendingGamepadInput = event.data;
-  if (!gamepadInputFrame) {
-    gamepadInputFrame = window.requestAnimationFrame(publishGamepadInput);
-  }
+  const matched = gamepads.find(isProShockPreviewGamepad) || null;
+  gamepadPreviewIndex = matched?.index ?? null;
+  return matched;
 }
 
-function publishGamepadInput() {
-  const data = pendingGamepadInput;
-  pendingGamepadInput = null;
-  gamepadInputFrame = 0;
-  if (!data) return;
-  try {
-    const report = parseDs4InputReport(data);
-    gamepadInputSequence += 1;
+function pollGamepadPreview() {
+  gamepadPreviewFrame = 0;
+  if (!connected.value) return;
+  const gamepad = findPreviewGamepad();
+  if (gamepad?.axes?.length >= 4) {
+    const report = createGamepadPreviewSnapshot(gamepad);
+    gamepadPreviewSequence += 1;
     latestRaw.value = {
       ...latestRaw.value,
-      sequence: gamepadInputSequence,
+      sequence: gamepadPreviewSequence,
       buttons: report.buttons,
       dpad_hat: report.dpad_hat,
     };
     analogSnapshot.value = {
       ...analogSnapshot.value,
-      sequence: gamepadInputSequence,
+      sequence: gamepadPreviewSequence,
       hid: report.hid,
       output_stick_q15: report.output_stick_q15,
       output_trigger_q15: report.output_trigger_q15,
     };
     void handleCalibrationStageConfirm(latestRaw.value);
-  } catch (error) {
-    log(error.message);
   }
+  gamepadPreviewFrame = window.requestAnimationFrame(pollGamepadPreview);
 }
 
 function startSnapshotPolling() {
   stopSessionTimers();
-  gamepadInputDevice = client.device;
-  if (gamepadInputDevice) {
-    gamepadInputDevice.addEventListener("inputreport", handleGamepadInputReport);
-  }
+  gamepadPreviewFrame = window.requestAnimationFrame(pollGamepadPreview);
   /* Seed raw/calibrated fields once; ongoing preview uses interrupt IN. */
   void pollAnalogSnapshot(true);
 }

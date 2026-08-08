@@ -10,7 +10,8 @@ WebHID handle；连接、断开和关闭页面都不会让 USB 重新枚举或�
 
 Portal 通过 `sendFeatureReport(0xF0, ...)` 发送固定 64 字节协议包，并通过
 `receiveFeatureReport(0xF0)` 轮询响应。固件服务任务尚未完成时会返回 BUSY，Portal
-会自动重试。
+会自动重试。常驻实时预览使用浏览器 Gamepad API 按动画帧读取最新状态，不监听
+8 kHz WebHID `inputreport`，也不连续占用 EP0 Feature 通道。
 
 ## 固件升级与恢复
 

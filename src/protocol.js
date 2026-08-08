@@ -456,35 +456,6 @@ export function parseAnalogSnapshot(payload) {
   };
 }
 
-/**
- * Parse the payload of DS4 interrupt Input Report 0x01.
- *
- * WebHID exposes the Report ID separately on the inputreport event, so data
- * starts at the first axis byte rather than the on-wire report ID byte.
- */
-export function parseDs4InputReport(payload) {
-  if (payload.byteLength < 9) {
-    throw new Error(`Unexpected DS4 input payload size: ${payload.byteLength}`);
-  }
-  const bytes = new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
-  const buttons = ((bytes[4] >> 4)
-    | (bytes[5] << 4)
-    | ((bytes[6] & 0x03) << 12)) & 0x3fff;
-  const axisQ15 = (value) => (value < 128
-    ? -Math.round(((128 - value) * Q15_ONE) / 128)
-    : Math.round(((value - 128) * Q15_ONE) / 127));
-  const triggerQ15 = (value) => Math.round((value * Q15_ONE) / 255);
-
-  return {
-    counter: bytes[6] >> 2,
-    buttons,
-    dpad_hat: bytes[4] & 0x0f,
-    hid: [bytes[0], bytes[1], bytes[2], bytes[3], bytes[7], bytes[8]],
-    output_stick_q15: [bytes[0], bytes[1], bytes[2], bytes[3]].map(axisQ15),
-    output_trigger_q15: [bytes[7], bytes[8]].map(triggerQ15),
-  };
-}
-
 export function makeProfileChunkRequest(profileIndex, offset, length) {
   const payload = new Uint8Array(PROFILE_CHUNK_HEADER_SIZE);
   const view = new DataView(payload.buffer);

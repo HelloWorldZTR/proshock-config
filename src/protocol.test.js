@@ -5,7 +5,6 @@ import {
   LEGACY_CONFIG_INFO_SIZE,
   digitalMaskFromRawInput,
   parseConfigInfo,
-  parseDs4InputReport,
   parseDigitalInput,
 } from "./protocol.js";
 
@@ -50,23 +49,4 @@ test("legacy raw input fallback reconstructs buttons and diagonal D-pad", () => 
     buttons: (1 << 0) | (1 << 12),
     dpad_hat: 1,
   }), (1 << 0) | (1 << 12) | (1 << 14) | (1 << 15));
-});
-
-test("DS4 interrupt input drives live preview without Feature polling", () => {
-  const payload = new Uint8Array(63);
-  payload.set([0, 128, 255, 64], 0);
-  payload[4] = 0x31;
-  payload[5] = 0x02;
-  payload[6] = 0x35;
-  payload[7] = 0;
-  payload[8] = 255;
-
-  assert.deepEqual(parseDs4InputReport(new DataView(payload.buffer)), {
-    counter: 13,
-    buttons: 0x1023,
-    dpad_hat: 1,
-    hid: [0, 128, 255, 64, 0, 255],
-    output_stick_q15: [-32767, 0, 32767, -16384],
-    output_trigger_q15: [0, 32767],
-  });
 });
