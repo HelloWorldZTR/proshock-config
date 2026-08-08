@@ -62,8 +62,9 @@ export const CONFIG_STATUS_NAME = {
 export const AXES = ["LX", "LY", "RX", "RY"];
 export const STICKS = ["Left stick", "Right stick"];
 export const TRIGGERS = ["L2", "R2"];
-export const PACKET_SIZE = 64;
-export const HEADER_SIZE = 8;
+export const CONFIG_PACKET_SIZE = 63;
+export const CONFIG_HEADER_SIZE = 7;
+export const IAP_PACKET_SIZE = 64;
 export const PAYLOAD_SIZE = 56;
 export const PROFILE_SIZE = 320;
 export const PROFILE_CHUNK_DATA_SIZE = 48;
@@ -76,7 +77,7 @@ export const LEGACY_CONFIG_INFO_SIZE = 52;
 export const CONFIG_INFO_SIZE = 56;
 export const RAW_SIZE = 20;
 export const DIGITAL_INPUT_SIZE = 8;
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const SCHEMA_VERSION = 7;
 export const PROFILE_VERSION = 4;
 export const ANALOG_CALIBRATION_VERSION = 1;
@@ -102,25 +103,29 @@ import {
   calibrationAxisInvertFromMask,
 } from "./calibration-polarity.js";
 
-export function encodePacket(command, payload = new Uint8Array()) {
+export function encodePacket(command, payload = new Uint8Array(), transactionId = 0) {
   if (payload.byteLength > PAYLOAD_SIZE) {
     throw new Error(`Payload too large: ${payload.byteLength}`);
   }
-  const packet = new Uint8Array(PACKET_SIZE);
+  if (!Number.isInteger(transactionId) || transactionId < 0 || transactionId > 0xffff) {
+    throw new Error(`Invalid transaction ID: ${transactionId}`);
+  }
+  const packet = new Uint8Array(CONFIG_PACKET_SIZE);
   const view = new DataView(packet.buffer);
   packet[0] = PROTOCOL_VERSION;
   packet[1] = command;
-  view.setUint16(4, payload.byteLength, true);
-  packet.set(payload, HEADER_SIZE);
+  packet[4] = payload.byteLength;
+  view.setUint16(5, transactionId, true);
+  packet.set(payload, CONFIG_HEADER_SIZE);
   return packet;
 }
 
 export function decodePacket(bytes) {
-  if (bytes.byteLength !== PACKET_SIZE) {
+  if (bytes.byteLength !== CONFIG_PACKET_SIZE) {
     throw new Error(`Unexpected packet size: ${bytes.byteLength}`);
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const payloadLength = view.getUint16(4, true);
+  const payloadLength = view.getUint8(4);
   if (payloadLength > PAYLOAD_SIZE) {
     throw new Error(`Unexpected payload length: ${payloadLength}`);
   }
@@ -128,8 +133,10 @@ export function decodePacket(bytes) {
     protocolVersion: bytes[0],
     command: bytes[1],
     status: bytes[2],
+    flags: bytes[3],
     payloadLength,
-    payload: bytes.slice(HEADER_SIZE, HEADER_SIZE + payloadLength),
+    transactionId: view.getUint16(5, true),
+    payload: bytes.slice(CONFIG_HEADER_SIZE, CONFIG_HEADER_SIZE + payloadLength),
   };
 }
 

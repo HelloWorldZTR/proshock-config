@@ -27,6 +27,7 @@ function fakeIapDevice(onSend) {
 
 test("IAP packets preserve command, sequence, and payload", () => {
   const encoded = encodeIapPacket(IAP_COMMAND.WRITE_CHUNK, 0x1234, new Uint8Array([1, 2, 3]));
+  assert.equal(encoded.byteLength, 64);
   encoded[2] = 0x0d;
   const decoded = decodeIapPacket(encoded);
   assert.equal(decoded.command, IAP_COMMAND.WRITE_CHUNK);

@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { CONFIG_FILTERS, CONFIG_REPORT_ID, encodePacket } from "./protocol.js";
+import {
+  CONFIG_FILTERS,
+  CONFIG_PACKET_SIZE,
+  CONFIG_REPORT_ID,
+  decodePacket,
+  encodePacket,
+} from "./protocol.js";
 import {
   WebHidClient,
   hasConfigFeatureReport,
@@ -15,6 +21,16 @@ function mockDevice(collections, opened = false) {
     async close() { this.opened = false; },
   };
 }
+
+test("V2 configuration packets keep 56 payload bytes inside one 63-byte report", () => {
+  const payload = new Uint8Array(56).map((_, index) => index);
+  const encoded = encodePacket(0x06, payload, 0x1234);
+  const decoded = decodePacket(encoded);
+  assert.equal(encoded.byteLength, 63);
+  assert.equal(decoded.protocolVersion, 2);
+  assert.equal(decoded.transactionId, 0x1234);
+  assert.deepEqual(Array.from(decoded.payload), Array.from(payload));
+});
 
 test("only a controller declaring Feature Report 0xF0 is configurable", () => {
   const config = mockDevice([{
@@ -114,9 +130,9 @@ test("commands use Feature Report 0xF0 and poll through BUSY", async () => {
     featureReports: [{ reportId: CONFIG_REPORT_ID }],
   }], true);
   const sent = [];
-  const busy = encodePacket(0x04);
+  const busy = encodePacket(0x04, new Uint8Array(), 1);
   busy[2] = 0x01;
-  const ok = encodePacket(0x04, new Uint8Array([0x55]));
+  const ok = encodePacket(0x04, new Uint8Array([0x55]), 1);
   let readCount = 0;
   config.sendFeatureReport = async (reportId, bytes) => {
     sent.push({ reportId, bytes: new Uint8Array(bytes) });
@@ -132,8 +148,36 @@ test("commands use Feature Report 0xF0 and poll through BUSY", async () => {
   const response = await client.sendCommand(0x04);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].reportId, CONFIG_REPORT_ID);
-  assert.equal(sent[0].bytes.byteLength, 64);
+  assert.equal(sent[0].bytes.byteLength, CONFIG_PACKET_SIZE);
+  assert.equal(decodePacket(sent[0].bytes).transactionId, 1);
   assert.equal(readCount, 2);
   assert.equal(response.status, 0);
   assert.deepEqual(Array.from(response.payload), [0x55]);
+});
+
+test("stale responses are drained before the current transaction is retried", async () => {
+  const config = mockDevice([{
+    usagePage: 0x01,
+    usage: 0x05,
+    featureReports: [{ reportId: CONFIG_REPORT_ID }],
+  }], true);
+  const stale = encodePacket(0x07, new Uint8Array(), 0x1234);
+  const current = encodePacket(0x04, new Uint8Array([0x66]), 1);
+  const sent = [];
+  let readCount = 0;
+  config.sendFeatureReport = async (reportId, bytes) => {
+    sent.push({ reportId, packet: decodePacket(new Uint8Array(bytes)) });
+  };
+  config.receiveFeatureReport = async () => {
+    const bytes = readCount++ === 0 ? stale : current;
+    return new DataView(bytes.buffer);
+  };
+
+  const client = new WebHidClient();
+  await client.openConfigDevice(config);
+  const response = await client.sendCommand(0x04);
+  assert.equal(sent.length, 2);
+  assert.deepEqual(sent.map(({ packet }) => packet.transactionId), [1, 1]);
+  assert.equal(response.transactionId, 1);
+  assert.deepEqual(Array.from(response.payload), [0x66]);
 });

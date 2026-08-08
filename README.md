@@ -1,6 +1,6 @@
 # ProShock Config
 
-ProShock 4 的浏览器 WebHID 配置工具。它通过固定 64 字节 WebHID
+ProShock 4 的浏览器 WebHID 配置工具。它通过固定 63 字节 V2 WebHID
 数据包配置手柄 profile、摇杆与扳机校准、输入映射及轮询率。
 
 固件始终只暴露一个 DS4-compatible HID interface 和一个顶层 Game Pad Collection。
@@ -8,9 +8,10 @@ ProShock 4 的浏览器 WebHID 配置工具。它通过固定 64 字节 WebHID
 Windows 游戏控制器，也没有临时 Configuration Mode。点击连接只会打开浏览器的
 WebHID handle；连接、断开和关闭页面都不会让 USB 重新枚举或中断游戏手柄上报。
 
-Portal 通过 `sendFeatureReport(0xF0, ...)` 发送固定 64 字节协议包，并通过
+Portal 通过 `sendFeatureReport(0xF0, ...)` 发送固定 63 字节协议包；加上 Report ID
+后 EP0 数据阶段正好为 64 字节。Portal 通过
 `receiveFeatureReport(0xF0)` 轮询响应。固件服务任务尚未完成时会返回 BUSY，Portal
-会自动重试。常驻实时预览使用浏览器 Gamepad API 按动画帧读取最新状态，不监听
+使用 transaction ID 排空旧响应并幂等重试。常驻实时预览使用浏览器 Gamepad API 按动画帧读取最新状态，不监听
 8 kHz WebHID `inputreport`，也不连续占用 EP0 Feature 通道。
 
 ## 固件升级与恢复
@@ -19,6 +20,7 @@ Portal 通过 `sendFeatureReport(0xF0, ...)` 发送固定 64 字节协议包，�
 签名、CRC32、SHA-512、目标主控和解密结果，通过后才允许进入 IAP 和擦除应用分区。
 传输支持相同 sequence 最多三次重试、32 字节乱序块、4 KiB 页重试以及 bitmap
 缺块补传。签名有效的旧版本允许刷入，但页面会明确提示降级风险并要求确认。
+IAP 设备继续使用独立的 64 字节中断 IN/OUT 包，不与 63 字节配置协议共享包长。
 
 断电后按住 **PS + Options** 再接通电源，可在应用损坏或升级中断时强制进入
 `ProShock 4 IAP`。旧设备第一次安装 bootloader 仍必须使用 WCH-Link；网页无法从

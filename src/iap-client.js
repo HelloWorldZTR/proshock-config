@@ -1,4 +1,4 @@
-import { IAP_FILTERS, PACKET_SIZE } from "./protocol.js";
+import { IAP_FILTERS, IAP_PACKET_SIZE } from "./protocol.js";
 
 export const IAP_COMMAND = Object.freeze({
   GET_INFO: 0x01,
@@ -34,7 +34,7 @@ export function hasIapCollection(device) {
 
 export function encodeIapPacket(command, sequence, payload = new Uint8Array()) {
   if (payload.byteLength > 56) throw new Error("IAP payload exceeds 56 bytes.");
-  const packet = new Uint8Array(PACKET_SIZE);
+  const packet = new Uint8Array(IAP_PACKET_SIZE);
   const view = new DataView(packet.buffer);
   packet[0] = 1;
   packet[1] = command;
@@ -45,7 +45,7 @@ export function encodeIapPacket(command, sequence, payload = new Uint8Array()) {
 }
 
 export function decodeIapPacket(bytes) {
-  if (bytes.byteLength !== PACKET_SIZE) throw new Error("Unexpected IAP packet size.");
+  if (bytes.byteLength !== IAP_PACKET_SIZE) throw new Error("Unexpected IAP packet size.");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const payloadLength = view.getUint16(4, true);
   if (payloadLength > 56) throw new Error("Unexpected IAP payload length.");
