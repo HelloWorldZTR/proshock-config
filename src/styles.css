@@ -651,7 +651,8 @@ input[type=range] { width: 100%; padding: 0; accent-color: var(--accent); }
 .firmware-device-summary > div:last-child { padding-right: 0; border-right: 0; }
 .firmware-device-summary dt, .firmware-manifest-grid dt { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .07em; }
 .firmware-device-summary dd, .firmware-manifest-grid dd { min-width: 0; margin: 0; overflow-wrap: anywhere; color: var(--text); font: 11px ui-monospace, monospace; }
-.firmware-update-panel { margin-top: 22px; border: 1px solid var(--border); background: rgba(16,23,32,.48); }
+.firmware-install-stage { margin-top: 22px; border: 1px solid var(--border); background: rgba(16,23,32,.48); }
+.firmware-update-panel { overflow: hidden; }
 .firmware-update-panel > header, .firmware-progress-panel > header { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 16px; border-bottom: 1px solid var(--border); }
 .firmware-update-panel > header .eyebrow, .firmware-progress-panel > header .eyebrow { margin-bottom: 2px; }
 .firmware-update-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); }
@@ -672,18 +673,26 @@ input[type=range] { width: 100%; padding: 0; accent-color: var(--accent); }
 .firmware-update-panel > footer { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 11px 16px; border-top: 1px solid var(--border); }
 .firmware-update-panel > footer > span { color: var(--muted); font-size: 9px; }
 .firmware-update-panel > footer button { min-height: 36px; font-size: 10px; }
-.firmware-progress-panel { margin-top: 14px; padding-bottom: 14px; border: 1px solid var(--border); background: rgba(16,23,32,.48); }
+.firmware-progress-panel { display: flex; flex-direction: column; overflow: hidden; }
 .firmware-progress-panel > header > strong { color: var(--accent); font: 18px ui-monospace, monospace; }
-.firmware-progress-panel > p { margin: 14px 16px 0; }
 .firmware-progress-track { height: 3px; overflow: hidden; background: rgba(255,255,255,.06); }
 .firmware-progress-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); transition: width .2s ease; }
+.firmware-progress-body { flex: 1 1 auto; display: flex; flex-direction: column; padding: 16px; }
+.firmware-upgrade-caution { display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 12px; padding: 11px 13px; border: 1px solid rgba(242,184,75,.24); background: rgba(242,184,75,.05); }
+.firmware-upgrade-caution > svg { width: 18px; height: 18px; color: var(--warning); }
+.firmware-upgrade-caution strong { display: block; margin-bottom: 3px; color: #ffd98c; font-size: 11px; }
+.firmware-upgrade-caution p { margin: 0; font-size: 10px; line-height: 1.5; }
+.firmware-upgrade-caution b { color: #ffd98c; }
 .firmware-phase-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 14px 16px 0; padding: 0; list-style: none; }
+.firmware-progress-body > .firmware-phase-list { margin-inline: 0; }
 .firmware-phase-list li { min-width: 0; display: grid; grid-template-columns: 8px minmax(0, 1fr); align-items: center; gap: 7px; min-height: 40px; padding: 8px; border: 1px solid var(--border); color: var(--muted); font-size: 9px; }
 .firmware-phase-list li > i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .firmware-phase-list li.active { border-color: rgba(85,214,255,.38); color: var(--accent); }
 .firmware-phase-list li.active > i { background: var(--accent); box-shadow: 0 0 8px rgba(85,214,255,.55); }
 .firmware-phase-list li.complete { border-color: rgba(82,227,164,.25); color: var(--success); }
 .firmware-phase-list li.complete > i { background: var(--success); }
+.firmware-progress-body > .firmware-success, .firmware-progress-body > .firmware-error { margin: 14px 0 0; }
+.firmware-progress-back { align-self: flex-end; min-height: 34px; margin-top: 12px; font-size: 10px; }
 .firmware-reset-panel { display: grid; grid-template-columns: 38px minmax(0, 1fr) max-content; align-items: center; gap: 14px; margin-top: 22px; padding: 15px 16px; border-top: 1px solid rgba(255,100,124,.18); border-bottom: 1px solid rgba(255,100,124,.18); background: rgba(255,100,124,.025); }
 .firmware-reset-icon { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid rgba(255,100,124,.24); border-radius: 50%; color: var(--danger); }
 .firmware-reset-icon svg { width: 16px; }

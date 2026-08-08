@@ -66,7 +66,7 @@
         </dl>
       </section>
 
-      <section class="firmware-update-panel">
+      <section v-if="!installationStarted" ref="updatePanel" class="firmware-update-panel firmware-install-stage">
         <header>
           <div><span class="eyebrow">Signed package</span><h2>Install firmware</h2></div>
           <span :class="['firmware-state-pill', packageData ? 'success' : 'idle']"><i></i>{{ packageData ? "Verified" : "No file selected" }}</span>
@@ -106,14 +106,31 @@
         </footer>
       </section>
 
-      <section v-if="working || operationMessage || operationError" class="firmware-progress-panel" aria-live="polite">
+      <section
+        v-else
+        class="firmware-progress-panel firmware-install-stage"
+        :style="installPanelHeight ? { minHeight: `${installPanelHeight}px` } : undefined"
+        aria-live="polite"
+      >
         <header><div><span class="eyebrow">Installation status</span><h2>{{ operationTitle }}</h2></div><strong>{{ progressPercent }}%</strong></header>
         <div class="firmware-progress-track"><i :style="{ width: `${progressPercent}%` }"></i></div>
-        <ol v-if="currentPhase !== 'factory'" class="firmware-phase-list">
-          <li v-for="item in phases" :key="item.id" :class="phaseClass(item.id)"><i></i><span>{{ item.label }}</span></li>
-        </ol>
-        <p v-if="operationMessage" class="firmware-success">{{ operationMessage }}</p>
-        <p v-if="operationError" class="firmware-error" role="alert">{{ operationError }}</p>
+        <div class="firmware-progress-body">
+          <div class="firmware-upgrade-caution" role="note">
+            <TriangleAlert aria-hidden="true" />
+            <div>
+              <strong>Do not disconnect USB during the upgrade</strong>
+              <p>If USB or power is interrupted, hold <b>PS + Options</b> while reconnecting power to enter IAP and flash the firmware again.</p>
+            </div>
+          </div>
+          <ol class="firmware-phase-list">
+            <li v-for="item in phases" :key="item.id" :class="phaseClass(item.id)"><i></i><span>{{ item.label }}</span></li>
+          </ol>
+          <p v-if="operationMessage" class="firmware-success">{{ operationMessage }}</p>
+          <p v-if="operationError" class="firmware-error" role="alert">{{ operationError }}</p>
+          <button v-if="operationError && !working" type="button" class="firmware-progress-back" @click="returnToFirmwareSelection">
+            Back to firmware selection
+          </button>
+        </div>
       </section>
 
       <section class="firmware-reset-panel">
@@ -136,6 +153,7 @@ import {
   Power,
   RotateCcw,
   ShieldCheck,
+  TriangleAlert,
   UploadCloud,
   Usb,
 } from "@lucide/vue";
@@ -173,6 +191,9 @@ const currentPhase = ref("idle");
 const progress = ref({ completed: 0, total: 1 });
 const operationMessage = ref("");
 const operationError = ref("");
+const installationStarted = ref(false);
+const updatePanel = ref(null);
+const installPanelHeight = ref(0);
 
 const updater = new FirmwareUpdater(iapClient, (nextProgress) => {
   currentPhase.value = nextProgress.phase;
@@ -227,6 +248,19 @@ function resetOperation() {
   operationMessage.value = "";
   operationError.value = "";
   progress.value = { completed: 0, total: 1 };
+}
+
+function showInstallationProgress() {
+  installPanelHeight.value = Math.ceil(
+    updatePanel.value?.getBoundingClientRect().height || 0,
+  );
+  installationStarted.value = true;
+}
+
+function returnToFirmwareSelection() {
+  installationStarted.value = false;
+  currentPhase.value = "idle";
+  resetOperation();
 }
 
 async function selectFirmware(event) {
@@ -335,6 +369,7 @@ async function installFirmware() {
       `Downgrade ${formatVersion(info.firmwareVersion)} to ${packageVersion.value}?\n\nThe package is signed, but older firmware may remove features or compatibility.`,
     )) return;
 
+    showInstallationProgress();
     currentPhase.value = "manifest";
     progress.value = { completed: 0, total: 1 };
     await updater.install(packageData.value);

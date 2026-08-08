@@ -30,3 +30,14 @@ test("physical controller labels match the artwork in every locale", () => {
     "D-pad Down", "D-pad Left",
   ].forEach((label) => assert.equal(translate(label, "zh-CN"), label));
 });
+
+test("firmware progress safety warning is available in Chinese", () => {
+  assert.equal(
+    translate("Do not disconnect USB during the upgrade", "zh-CN"),
+    "升级期间请勿断开 USB",
+  );
+  assert.equal(
+    translate("Back to firmware selection", "zh-CN"),
+    "返回固件选择",
+  );
+});

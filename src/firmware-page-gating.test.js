@@ -27,3 +27,17 @@ test("IAP entry offers software entry or device selection without waiting copy",
   assert.doesNotMatch(pageSource, /Waiting for an IAP device/);
   assert.doesNotMatch(pageSource, /Older devices need WCH-Link/);
 });
+
+test("install card is replaced in place by a same-height progress warning", () => {
+  assert.match(
+    pageSource,
+    /v-if="!installationStarted" ref="updatePanel" class="firmware-update-panel firmware-install-stage"/,
+  );
+  assert.match(
+    pageSource,
+    /v-else\s+class="firmware-progress-panel firmware-install-stage"/,
+  );
+  assert.match(pageSource, /getBoundingClientRect\(\)\.height/);
+  assert.match(pageSource, /Do not disconnect USB during the upgrade/);
+  assert.match(pageSource, /hold <b>PS \+ Options<\/b>/);
+});
