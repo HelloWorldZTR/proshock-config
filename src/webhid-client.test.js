@@ -131,3 +131,75 @@ test("connect enters config through Feature 0xF0 then reacquires WebHID", async 
     globalThis.window = originalWindow;
   }
 });
+
+test("connect tolerates Windows reporting the mode-switch disconnect as a failed Feature write", async () => {
+  const normal = mockDevice([{ usagePage: 0xfff0, usage: 0x40 }]);
+  const config = mockDevice([{ usagePage: 0xff00, usage: 0x01 }]);
+  const writeError = new Error("Failed to write the feature report.");
+  const originalNavigator = globalThis.navigator;
+  const originalWindow = globalThis.window;
+  let getDevicesCount = 0;
+
+  normal.sendFeatureReport = async function sendFeatureReport(reportId, payload) {
+    this.featureReports.push({ reportId, payload: new Uint8Array(payload) });
+    throw writeError;
+  };
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      hid: {
+        async requestDevice() { return [normal]; },
+        async getDevices() {
+          getDevicesCount += 1;
+          return getDevicesCount === 1 ? [] : [config];
+        },
+      },
+    },
+  });
+  globalThis.window = { setTimeout };
+
+  try {
+    const client = new WebHidClient();
+    assert.equal(await client.connect(), config);
+    assert.equal(client.transitioning, false);
+    assert.equal(config.opened, true);
+    assert.equal(normal.featureReports.length, 1);
+  } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: originalNavigator,
+    });
+    globalThis.window = originalWindow;
+  }
+});
+
+test("connect preserves a genuine Feature write error and clears transition state", async () => {
+  const normal = mockDevice([{ usagePage: 0xfff0, usage: 0x40 }]);
+  const writeError = new Error("Failed to write the feature report.");
+  const originalNavigator = globalThis.navigator;
+
+  normal.sendFeatureReport = async () => { throw writeError; };
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      hid: {
+        async requestDevice() { return [normal]; },
+        async getDevices() { return []; },
+      },
+    },
+  });
+
+  try {
+    const client = new WebHidClient();
+    client.waitForConfigDevice = async () => {
+      throw new Error("Configuration mode did not appear.");
+    };
+    await assert.rejects(client.connect(), (error) => error === writeError);
+    assert.equal(client.transitioning, false);
+  } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: originalNavigator,
+    });
+  }
+});

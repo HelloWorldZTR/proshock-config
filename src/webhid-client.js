@@ -84,11 +84,24 @@ export class WebHidClient {
 
     this.transitioning = true;
     this.device = selected;
-    if (!selected.opened) await selected.open();
-    await selected.sendFeatureReport(CONFIG_ENTRY_REPORT_ID, CONFIG_ENTRY_PAYLOAD);
-
     try {
-      const configDevice = await this.waitForConfigDevice();
+      let featureReportError = null;
+      let configDevice;
+
+      if (!selected.opened) await selected.open();
+      try {
+        await selected.sendFeatureReport(CONFIG_ENTRY_REPORT_ID, CONFIG_ENTRY_PAYLOAD);
+      } catch (error) {
+        // Windows can report the expected mode-switch disconnect as a failed write.
+        featureReportError = error;
+      }
+
+      try {
+        configDevice = await this.waitForConfigDevice();
+      } catch (error) {
+        if (featureReportError) throw featureReportError;
+        throw error;
+      }
       await this.openConfigDevice(configDevice);
       return this.device;
     } finally {
