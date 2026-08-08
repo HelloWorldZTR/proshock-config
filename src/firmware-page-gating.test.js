@@ -41,3 +41,14 @@ test("install card is replaced in place by a same-height progress warning", () =
   assert.match(pageSource, /Do not disconnect USB during the upgrade/);
   assert.match(pageSource, /hold <b>PS \+ Options<\/b>/);
 });
+
+test("factory reset lets the user restart or remain in IAP", () => {
+  assert.match(pageSource, />Stay in IAP<\/button>/);
+  assert.match(pageSource, />Restart controller<\/button>/);
+  assert.match(pageSource, /factoryResetAwaitingChoice\.value = true/);
+  assert.match(pageSource, /async function restartAfterFactoryReset\(\)/);
+  assert.doesNotMatch(
+    pageSource,
+    /await updater\.factoryReset\(\);[\s\S]{0,160}await finishIapSession\(\)/,
+  );
+});

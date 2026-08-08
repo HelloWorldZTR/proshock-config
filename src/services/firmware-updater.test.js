@@ -103,9 +103,10 @@ test("factory reset echoes the device challenge and fixed confirmation", async (
   assert.equal(calls[1].command, IAP_COMMAND.FACTORY_RESET_CONFIRM);
   assert.deepEqual(calls[1].payload.slice(0, 4), [0x78, 0x56, 0x34, 0x12]);
   assert.equal(new TextDecoder().decode(new Uint8Array(calls[1].payload.slice(4))), "RESETCFG");
+  assert.equal(calls.length, 2, "Factory Reset must not boot the application automatically");
 });
 
-test("IAP entry tolerates reset racing the permanent WebHID close", async () => {
+test("IAP entry tolerates reset racing the Feature Report handle close", async () => {
   const configClient = {
     transitioning: false,
     async sendCommand() { return { status: 0 }; },

@@ -139,8 +139,15 @@
           <span class="eyebrow">Configuration recovery</span>
           <h2>Factory Reset</h2>
           <p>Deletes all Profiles, calibration, and settings. Firmware and the IAP bootloader are kept.</p>
+          <p v-if="factoryResetMessage" class="firmware-reset-result">{{ factoryResetMessage }}</p>
         </div>
-        <button type="button" class="danger-button" :disabled="working" @click="factoryReset">Erase settings and restore defaults</button>
+        <div class="firmware-reset-actions">
+          <template v-if="factoryResetAwaitingChoice">
+            <button type="button" :disabled="working" @click="stayInIapAfterFactoryReset">Stay in IAP</button>
+            <button v-if="deviceInfo?.appValid" type="button" class="primary" :disabled="working" @click="restartAfterFactoryReset">Restart controller</button>
+          </template>
+          <button v-else type="button" class="danger-button" :disabled="working" @click="factoryReset">Erase settings and restore defaults</button>
+        </div>
       </section>
     </template>
   </div>
@@ -194,6 +201,8 @@ const operationError = ref("");
 const installationStarted = ref(false);
 const updatePanel = ref(null);
 const installPanelHeight = ref(0);
+const factoryResetAwaitingChoice = ref(false);
+const factoryResetMessage = ref("");
 
 const updater = new FirmwareUpdater(iapClient, (nextProgress) => {
   currentPhase.value = nextProgress.phase;
@@ -407,6 +416,8 @@ async function factoryReset() {
   if (!window.confirm("Factory Reset deletes every Profile, calibration, and device setting. Firmware is kept. Continue?")) return;
   if (!window.confirm("Confirm again: erase Config A and Config B and restore defaults on next boot?")) return;
   resetOperation();
+  factoryResetAwaitingChoice.value = false;
+  factoryResetMessage.value = "";
   working.value = true;
   try {
     if (!iapClient.connected) {
@@ -417,7 +428,28 @@ async function factoryReset() {
     }
     currentPhase.value = "factory";
     await updater.factoryReset();
-    operationMessage.value = "Config A and Config B were erased and verified. Default settings will load on startup.";
+    factoryResetMessage.value = "Config A and Config B were erased and verified. Restart now to load defaults, or stay in IAP.";
+    factoryResetAwaitingChoice.value = true;
+  } catch (error) {
+    operationError.value = error.message;
+  } finally {
+    working.value = false;
+  }
+}
+
+function stayInIapAfterFactoryReset() {
+  factoryResetAwaitingChoice.value = false;
+  factoryResetMessage.value = "Factory reset is complete. The controller will remain in IAP until installed firmware is started.";
+}
+
+async function restartAfterFactoryReset() {
+  if (working.value || !deviceInfo.value?.appValid) return;
+  working.value = true;
+  try {
+    currentPhase.value = "reboot";
+    await updater.bootApplication();
+    operationMessage.value = "Factory defaults were restored and the installed firmware was started.";
+    factoryResetAwaitingChoice.value = false;
     await finishIapSession();
   } catch (error) {
     operationError.value = error.message;

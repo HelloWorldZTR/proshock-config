@@ -1,28 +1,45 @@
 import {
   CONFIG_FILTERS,
+  CONFIG_REPORT_ID,
   PACKET_SIZE,
   decodePacket,
   encodePacket,
 } from "./protocol.js";
 
-function hasCollection(candidate, usagePage, usage) {
-  return candidate.collections.some((collection) =>
-    collection.usagePage === usagePage && collection.usage === usage);
+const RESPONSE_TIMEOUT_MS = 5000;
+const BUSY_POLL_MS = 8;
+
+function collectionHasFeatureReport(collection, reportId) {
+  return (collection.featureReports || []).some((report) => report.reportId === reportId)
+    || (collection.children || []).some((child) =>
+      collectionHasFeatureReport(child, reportId));
 }
 
-export function hasConfigCollection(candidate) {
-  return hasCollection(candidate, 0xff00, 0x01);
+export function hasConfigFeatureReport(candidate) {
+  return (candidate.collections || []).some((collection) =>
+    collectionHasFeatureReport(collection, CONFIG_REPORT_ID));
 }
 
-/**
- * Return previously authorized ProShock controller devices still attached.
- */
-export async function getControllerDevices() {
-  if (!("hid" in navigator)) {
-    return [];
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function withTimeout(promise, milliseconds) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error("Timed out waiting for WebHID response."));
+    }, milliseconds);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
+function featureBytes(data) {
+  let bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  if(bytes.byteLength === (PACKET_SIZE + 1) && bytes[0] === CONFIG_REPORT_ID) {
+    bytes = bytes.slice(1);
   }
-  const devices = await navigator.hid.getDevices();
-  return devices.filter(hasConfigCollection);
+  return bytes;
 }
 
 export class WebHidClient {
@@ -30,7 +47,6 @@ export class WebHidClient {
     this.device = null;
     this.pending = null;
     this.transitioning = false;
-    this.onInputReport = this.onInputReport.bind(this);
   }
 
   get connected() {
@@ -46,67 +62,22 @@ export class WebHidClient {
       throw new Error("This browser does not support WebHID.");
     }
 
-    let devices = await getControllerDevices();
-    if (!devices.length) {
-      devices = await navigator.hid.requestDevice({ filters: CONFIG_FILTERS });
-    }
+    const devices = await navigator.hid.requestDevice({ filters: CONFIG_FILTERS });
     if (!devices.length) {
       return null;
     }
 
-    if (this.device) {
-      this.device.removeEventListener("inputreport", this.onInputReport);
-    }
-
-    const selected = devices.find(hasConfigCollection);
+    const selected = devices.find(hasConfigFeatureReport);
     if (!selected) {
-      throw new Error("The selected controller does not expose WebHID configuration.");
+      throw new Error("The selected controller does not expose configuration Feature Report 0xF0.");
     }
     await this.openConfigDevice(selected);
     return this.device;
   }
 
   async openConfigDevice(device) {
-    if (this.device) {
-      this.device.removeEventListener("inputreport", this.onInputReport);
-    }
     this.device = device;
     if (!device.opened) await device.open();
-    device.addEventListener("inputreport", this.onInputReport);
-  }
-
-  onInputReport(event) {
-    const data = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
-    if (data.byteLength !== PACKET_SIZE || !this.pending) {
-      return;
-    }
-
-    try {
-      const packet = decodePacket(data);
-      const active = this.pending;
-      if (packet.command !== active.command) {
-        this.rejectPending(new Error(
-          `Unexpected WebHID response 0x${packet.command.toString(16)} while waiting for 0x${active.command.toString(16)}.`,
-        ));
-        return;
-      }
-      this.pending = null;
-      clearTimeout(active.timeoutId);
-      active.resolve(packet);
-    } catch (error) {
-      this.rejectPending(error);
-    }
-  }
-
-  rejectPending(error) {
-    if (!this.pending) {
-      return;
-    }
-
-    const active = this.pending;
-    this.pending = null;
-    clearTimeout(active.timeoutId);
-    active.reject(error);
   }
 
   async sendCommand(command, payload = new Uint8Array()) {
@@ -118,23 +89,50 @@ export class WebHidClient {
       throw new Error("Another request is already in flight.");
     }
 
-    const packet = encodePacket(command, payload);
-    return new Promise((resolve, reject) => {
-      const timeoutId = window.setTimeout(() => {
-        this.rejectPending(new Error("Timed out waiting for WebHID response."));
-      }, 5000);
+    const active = { command, error: null };
+    const deadline = Date.now() + RESPONSE_TIMEOUT_MS;
+    this.pending = active;
 
-      this.pending = { command, resolve, reject, timeoutId };
-      this.device.sendReport(0, packet).catch((error) => {
-        this.rejectPending(error);
-      });
-    });
+    try {
+      await withTimeout(
+        this.device.sendFeatureReport(CONFIG_REPORT_ID, encodePacket(command, payload)),
+        RESPONSE_TIMEOUT_MS,
+      );
+
+      while (true) {
+        if (active.error) throw active.error;
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          throw new Error("Timed out waiting for WebHID response.");
+        }
+
+        const data = await withTimeout(
+          this.device.receiveFeatureReport(CONFIG_REPORT_ID),
+          remaining,
+        );
+        if (active.error) throw active.error;
+        const response = decodePacket(featureBytes(data));
+        if (response.status === 0x01) {
+          await delay(BUSY_POLL_MS);
+          continue;
+        }
+        if (response.command !== command) {
+          throw new Error(
+            `Unexpected WebHID response 0x${response.command.toString(16)} while waiting for 0x${command.toString(16)}.`,
+          );
+        }
+        return response;
+      }
+    } finally {
+      if (this.pending === active) this.pending = null;
+    }
   }
 
   async close() {
-    this.rejectPending(new Error("WebHID connection closed."));
+    if (this.pending) {
+      this.pending.error = new Error("WebHID connection closed.");
+    }
     if (!this.device) return;
-    this.device.removeEventListener("inputreport", this.onInputReport);
     if (this.device.opened) await this.device.close();
     this.device = null;
   }

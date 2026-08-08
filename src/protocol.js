@@ -1,9 +1,9 @@
 export const CONFIG_FILTERS = [{
   vendorId: 0x054c,
   productId: 0x09cc,
-  usagePage: 0xff00,
-  usage: 0x01,
 }];
+
+export const CONFIG_REPORT_ID = 0xf0;
 
 export const IAP_FILTERS = [{
   vendorId: 0x054c,
