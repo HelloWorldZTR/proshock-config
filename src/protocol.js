@@ -1,10 +1,3 @@
-export const NORMAL_FILTERS = [{
-  vendorId: 0x054c,
-  productId: 0x09cc,
-  usagePage: 0xfff0,
-  usage: 0x40,
-}];
-
 export const CONFIG_FILTERS = [{
   vendorId: 0x054c,
   productId: 0x09cc,
@@ -18,13 +11,6 @@ export const IAP_FILTERS = [{
   usagePage: 0xff01,
   usage: 0x01,
 }];
-
-export const FILTERS = [...NORMAL_FILTERS, ...CONFIG_FILTERS];
-
-export const CONFIG_ENTRY_REPORT_ID = 0xf0;
-export const CONFIG_ENTRY_PAYLOAD = new Uint8Array([
-  0x50, 0x53, 0x34, 0x43, 0x46, 0x47, 0x01, 0x00,
-]);
 
 export const COMMAND = {
   GET_CONFIG: 0x01,
@@ -45,8 +31,6 @@ export const COMMAND = {
   COMMIT_ANALOG_CALIBRATION_WRITE: 0x10,
   GET_ANALOG_SNAPSHOT: 0x11,
   GET_DIGITAL_INPUT: 0x12,
-  KEEP_ALIVE: 0x13,
-  EXIT_CONFIG: 0x14,
   ENTER_IAP: 0x20,
 };
 

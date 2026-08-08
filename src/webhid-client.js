@@ -1,15 +1,9 @@
 import {
-  COMMAND,
-  CONFIG_ENTRY_PAYLOAD,
-  CONFIG_ENTRY_REPORT_ID,
-  FILTERS,
+  CONFIG_FILTERS,
   PACKET_SIZE,
   decodePacket,
   encodePacket,
 } from "./protocol.js";
-
-const CONFIG_RECONNECT_TIMEOUT_MS = 9000;
-const CONFIG_RECONNECT_POLL_MS = 100;
 
 function hasCollection(candidate, usagePage, usage) {
   return candidate.collections.some((collection) =>
@@ -20,10 +14,6 @@ export function hasConfigCollection(candidate) {
   return hasCollection(candidate, 0xff00, 0x01);
 }
 
-export function hasNormalEntryCollection(candidate) {
-  return hasCollection(candidate, 0xfff0, 0x40);
-}
-
 /**
  * Return previously authorized ProShock controller devices still attached.
  */
@@ -32,9 +22,7 @@ export async function getControllerDevices() {
     return [];
   }
   const devices = await navigator.hid.getDevices();
-  return devices.filter((device) => (
-    hasConfigCollection(device) || hasNormalEntryCollection(device)
-  ));
+  return devices.filter(hasConfigCollection);
 }
 
 export class WebHidClient {
@@ -60,7 +48,7 @@ export class WebHidClient {
 
     let devices = await getControllerDevices();
     if (!devices.length) {
-      devices = await navigator.hid.requestDevice({ filters: FILTERS });
+      devices = await navigator.hid.requestDevice({ filters: CONFIG_FILTERS });
     }
     if (!devices.length) {
       return null;
@@ -70,43 +58,12 @@ export class WebHidClient {
       this.device.removeEventListener("inputreport", this.onInputReport);
     }
 
-    const selected = devices.find(hasConfigCollection)
-      || devices.find(hasNormalEntryCollection)
-      || devices[0];
-    if (hasConfigCollection(selected)) {
-      await this.openConfigDevice(selected);
-      return this.device;
+    const selected = devices.find(hasConfigCollection);
+    if (!selected) {
+      throw new Error("The selected controller does not expose WebHID configuration.");
     }
-
-    if (!hasNormalEntryCollection(selected)) {
-      throw new Error("The selected controller does not expose the configuration entry report.");
-    }
-
-    this.transitioning = true;
-    this.device = selected;
-    try {
-      let featureReportError = null;
-      let configDevice;
-
-      if (!selected.opened) await selected.open();
-      try {
-        await selected.sendFeatureReport(CONFIG_ENTRY_REPORT_ID, CONFIG_ENTRY_PAYLOAD);
-      } catch (error) {
-        // Windows can report the expected mode-switch disconnect as a failed write.
-        featureReportError = error;
-      }
-
-      try {
-        configDevice = await this.waitForConfigDevice();
-      } catch (error) {
-        if (featureReportError) throw featureReportError;
-        throw error;
-      }
-      await this.openConfigDevice(configDevice);
-      return this.device;
-    } finally {
-      this.transitioning = false;
-    }
+    await this.openConfigDevice(selected);
+    return this.device;
   }
 
   async openConfigDevice(device) {
@@ -116,20 +73,6 @@ export class WebHidClient {
     this.device = device;
     if (!device.opened) await device.open();
     device.addEventListener("inputreport", this.onInputReport);
-  }
-
-  async waitForConfigDevice(timeoutMs = CONFIG_RECONNECT_TIMEOUT_MS) {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      const devices = await getControllerDevices();
-      const configDevice = devices.find(hasConfigCollection);
-      if (configDevice) return configDevice;
-      await new Promise((resolve) => window.setTimeout(
-        resolve,
-        CONFIG_RECONNECT_POLL_MS,
-      ));
-    }
-    throw new Error("The controller did not reconnect in configuration mode. It will return to Gaming Mode automatically.");
   }
 
   onInputReport(event) {
@@ -188,14 +131,8 @@ export class WebHidClient {
     });
   }
 
-  sendBestEffortExit() {
-    if (!this.connected || this.pending) return;
-    const packet = encodePacket(COMMAND.EXIT_CONFIG);
-    void this.device.sendReport(0, packet).catch(() => {});
-  }
-
   async close() {
-    this.rejectPending(new Error("Configuration session closed."));
+    this.rejectPending(new Error("WebHID connection closed."));
     if (!this.device) return;
     this.device.removeEventListener("inputreport", this.onInputReport);
     if (this.device.opened) await this.device.close();

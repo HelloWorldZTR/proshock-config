@@ -84,8 +84,8 @@
         class="header-disconnect-action"
         :disabled="busy || disconnecting"
         :aria-busy="disconnecting"
-        :title="disconnecting ? 'Disconnecting…' : 'Disconnect and restore Gaming Mode'"
-        :aria-label="disconnecting ? 'Disconnecting…' : 'Disconnect and restore Gaming Mode'"
+        :title="disconnecting ? 'Disconnecting…' : 'Disconnect WebHID'"
+        :aria-label="disconnecting ? 'Disconnecting…' : 'Disconnect WebHID'"
         @click="emitDisconnect"
       >
         <LogOut class="header-disconnect-icon" />

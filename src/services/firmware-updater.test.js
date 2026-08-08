@@ -105,7 +105,7 @@ test("factory reset echoes the device challenge and fixed confirmation", async (
   assert.equal(new TextDecoder().decode(new Uint8Array(calls[1].payload.slice(4))), "RESETCFG");
 });
 
-test("configuration transition tolerates reset racing WebHID close", async () => {
+test("IAP entry tolerates reset racing the permanent WebHID close", async () => {
   const configClient = {
     transitioning: false,
     async sendCommand() { return { status: 0 }; },

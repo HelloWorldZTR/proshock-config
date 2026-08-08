@@ -12,7 +12,7 @@
     <div v-if="!connected" class="empty-state">
       <div class="home-controller-icon" aria-hidden="true" v-html="controllerIcon"></div>
       <h1>Connect your ProShock controller</h1>
-      <p>Connecting temporarily switches the controller from Gaming Mode to Configuration Mode and reconnects USB. Keep this tab open while editing.</p>
+      <p>Connect directly to the controller's always-available WebHID interface. The game controller stays enumerated while you edit.</p>
       <button type="button" class="primary" :disabled="busy" @click="$emit('connect')">Connect device</button>
     </div>
     <div v-else class="home-stage">

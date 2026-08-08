@@ -23,7 +23,7 @@
       </template>
       <template v-else-if="configConnected">
         <h2 id="iap-entry-title">Ready to enter IAP</h2>
-        <p>The controller will safely leave Configuration Mode, restart, and reconnect through its isolated upgrade interface.</p>
+        <p>The controller will restart from its WebHID interface and reconnect through the isolated IAP interface.</p>
       </template>
       <template v-else>
         <h2 id="iap-entry-title">Select an IAP device</h2>

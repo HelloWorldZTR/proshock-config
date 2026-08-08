@@ -23,11 +23,11 @@
           @click="$emit('discard')"
         >Discard & leave</button>
         <button
-          v-if="sessionExit"
+          v-if="connectionExit"
           type="button"
           :disabled="busy"
           @click="$emit('keep-ram')"
-        >Exit keeping RAM</button>
+        >Disconnect keeping RAM</button>
         <button ref="stayButton" type="button" :disabled="busy" @click="$emit('stay')">
           {{ kind === "calibration" ? "Continue calibration" : "Stay" }}
         </button>
@@ -61,7 +61,7 @@ const props = defineProps({
   canDiscard: { type: Boolean, default: true },
   discardReason: { type: String, default: "" },
   error: { type: String, default: "" },
-  sessionExit: { type: Boolean, default: false },
+  connectionExit: { type: Boolean, default: false },
 });
 defineEmits(["stay", "apply", "save", "discard", "keep-ram"]);
 
