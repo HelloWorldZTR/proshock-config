@@ -8,10 +8,11 @@
       :selected="selectedProfile"
       :profile-draft-changed="profileChanged"
       :connected="connected"
-      :busy="busy"
+      :busy="busy || iapMode"
       :disconnecting="exitingConfig"
-      :current-page="page"
+      :current-page="iapMode ? 'firmware' : page"
       :state="headerState"
+      :iap-active="iapMode"
       @navigate="requestPageNavigation"
       @profile-select="requestProfileSwitch"
       @primary-action="handleHeaderAction"
@@ -21,16 +22,17 @@
       @export-profile="downloadProfile"
       @export-backup="downloadBackup"
       @device-info="requestGo('diagnostics', 'device')"
+      @factory-reset="requestGo('firmware')"
     />
     <HomePage
-      v-if="page === 'home'"
+      v-if="page === 'home' && !iapMode"
       :connected="connected" :busy="busy" :profiles="profileCards" :config-info="configInfo"
       :selected-profile="selectedProfile" :raw="latestRaw" :snapshot="liveInputSnapshot"
       :calibration="calibrationDraft || defaultCalibration" :state-label="stateLabel"
       @connect="connectFlow" @switch-profile="requestProfileSwitch" @edit-profile="requestEditProfile"
     />
     <ConfiguratorPage
-      v-else-if="page === 'configurator'"
+      v-else-if="page === 'configurator' && !iapMode"
       :section="configuratorSection" :selected-profile="selectedProfile" :state-label="stateLabel"
       :profile="profileDraft" :baseline-profile="profileBackup" :pollrate-hz="pollrateHz"
       :boot-profile="bootProfile" :raw="latestRaw" :snapshot="liveInputSnapshot"
@@ -43,7 +45,7 @@
       @calibrate="requestGo('calibration')"
     />
     <QuickCalibrationPage
-      v-else-if="page === 'calibration'"
+      v-else-if="page === 'calibration' && !iapMode"
       :step="wizardStep" :busy="busy" :error="wizardError" :neutral-result="neutralResult"
       :center-capture-active="centerCaptureActive" :center-capture-status="centerCaptureStatus"
       :left-range="rangeCaptureActive ? { sectorCounts: rangePreview.leftSectorCounts } : leftRange"
@@ -52,6 +54,13 @@
       :calibration-valid="calibrationValidation.pass"
       :checks="calibrationChecks"
       @primary="wizardPrimary" @back="wizardBack" @cancel="cancelWizard"
+    />
+    <FirmwareUpgradePage
+      v-else-if="page === 'firmware' || iapMode"
+      :config-client="client"
+      :config-connected="connected"
+      :configuration-dirty="hasUnsaved"
+      @iap-session="handleIapSession"
     />
     <DiagnosticsPage
       v-else
@@ -100,6 +109,7 @@ import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
 import HomePage from "./pages/HomePage.vue";
 import ConfiguratorPage from "./pages/ConfiguratorPage.vue";
 import QuickCalibrationPage from "./pages/QuickCalibrationPage.vue";
+import FirmwareUpgradePage from "./pages/FirmwareUpgradePage.vue";
 import DiagnosticsPage from "./pages/DiagnosticsPage.vue";
 import { cloneConfigData } from "./clone-data.js";
 import { configSessionWarningStore } from "./config-session-warning-store.js";
@@ -173,6 +183,7 @@ const connected = ref(false);
 const busy = ref(false);
 const saveInProgress = ref(false);
 const exitingConfig = ref(false);
+const iapMode = ref(false);
 const configSessionWarningOpen = ref(false);
 const deviceLabel = ref("Disconnected");
 const configInfo = ref(null);
@@ -281,6 +292,7 @@ const navigation = [
   { id: "home", label: "Home" },
   { id: "configurator", label: "Configurator" },
   { id: "calibration", label: "Quick Calibration" },
+  { id: "firmware", label: "Firmware Upgrade" },
   { id: "diagnostics", label: "Diagnostics" },
 ];
 const profileChanged = computed(() => (
@@ -337,7 +349,7 @@ const leaveGuardKind = computed(() => deriveLeaveGuardKind({
 const hasUnsaved = computed(() => leaveGuardKind.value !== LEAVE_GUARD_KIND.NONE);
 const headerState = computed(() => deriveHeaderState({
   connected: connected.value,
-  busy: busy.value,
+  busy: busy.value || iapMode.value,
   saving: saveInProgress.value,
   hasApplyDraft: hasApplyDraft.value,
   applyValid: applyValid.value,
@@ -545,7 +557,24 @@ function requestGo(nextPage, section = null) {
 }
 
 function requestPageNavigation(nextPage) {
+  if (iapMode.value && nextPage !== "firmware") return;
   requestGo(nextPage);
+}
+
+function handleIapSession(active) {
+  iapMode.value = active;
+  if (active) {
+    stopCenterTimer();
+    stopRangeTimer();
+    stopTriggerTimer();
+    stopSessionTimers();
+    connected.value = false;
+    configSessionWarningOpen.value = false;
+    deviceLabel.value = "ProShock 4 IAP";
+    performGo("firmware");
+  } else {
+    deviceLabel.value = "Gaming Mode";
+  }
 }
 
 function handleHashChange() {
@@ -1684,6 +1713,9 @@ function handleHidDisconnect(event) {
     return;
   }
   if (client.transitioning) {
+    return;
+  }
+  if (iapMode.value) {
     return;
   }
   connected.value = false;

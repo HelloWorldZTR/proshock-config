@@ -7,7 +7,11 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "test": "node --test src/*.test.js src/services/*.test.js",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "firmware:keygen": "node scripts/firmware-tool.mjs keygen",
+    "firmware:pack": "node scripts/firmware-tool.mjs pack",
+    "firmware:inspect": "node scripts/firmware-tool.mjs inspect",
+    "firmware:factory-image": "node scripts/firmware-tool.mjs factory-image"
   },
   "dependencies": {
     "@lucide/vue": "^1.20.0",

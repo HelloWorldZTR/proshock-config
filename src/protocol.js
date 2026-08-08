@@ -12,6 +12,13 @@ export const CONFIG_FILTERS = [{
   usage: 0x01,
 }];
 
+export const IAP_FILTERS = [{
+  vendorId: 0x054c,
+  productId: 0x09cc,
+  usagePage: 0xff01,
+  usage: 0x01,
+}];
+
 export const FILTERS = [...NORMAL_FILTERS, ...CONFIG_FILTERS];
 
 export const CONFIG_ENTRY_REPORT_ID = 0xf0;
@@ -40,7 +47,12 @@ export const COMMAND = {
   GET_DIGITAL_INPUT: 0x12,
   KEEP_ALIVE: 0x13,
   EXIT_CONFIG: 0x14,
+  ENTER_IAP: 0x20,
 };
+
+export const ENTER_IAP_PAYLOAD = new Uint8Array([
+  0x50, 0x53, 0x34, 0x49, 0x41, 0x50, 0x01, 0x00,
+]);
 
 export const STATUS_NAME = {
   0x00: "OK",

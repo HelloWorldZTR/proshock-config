@@ -48,6 +48,7 @@
         :aria-current="currentPage === item.id ? 'page' : undefined"
         :aria-label="item.label"
         :title="item.label"
+        :disabled="iapActive && item.id !== 'firmware'"
         @click="navigate(item.id)"
       >
         <component :is="item.icon" class="app-navigation-icon" />
@@ -102,14 +103,14 @@
           @click="toggleMoreMenu"
         ><MoreHorizontal class="icon" /></button>
         <div v-if="moreOpen" class="more-menu header-more-menu" role="menu">
-          <button type="button" role="menuitem" :disabled="!connected || busy" @click="emitMore('refresh')">
+          <button type="button" role="menuitem" :disabled="!connected || busy || iapActive" @click="emitMore('refresh')">
             <RefreshCw class="menu-icon" />Refresh device
           </button>
           <button type="button" role="menuitem" @click="emitMore('import-profile')">Import Profile</button>
           <button type="button" role="menuitem" @click="emitMore('export-profile')">Export Profile</button>
           <button type="button" role="menuitem" :disabled="!connected" @click="emitMore('export-backup')">Export Full Backup</button>
           <button type="button" role="menuitem" @click="emitMore('device-info')">Device Information</button>
-          <button type="button" role="menuitem" disabled title="Requires a firmware command">Factory Reset · firmware required</button>
+          <button type="button" role="menuitem" :disabled="iapActive" @click="emitMore('factory-reset')">Factory Reset</button>
         </div>
       </div>
     </div>
@@ -127,6 +128,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   SlidersHorizontal,
+  UploadCloud,
 } from "@lucide/vue";
 import { availableLocales, currentLocale, setLocale } from "../i18n.js";
 
@@ -141,6 +143,7 @@ const props = defineProps({
   disconnecting: { type: Boolean, default: false },
   currentPage: { type: String, default: "home" },
   state: { type: Object, required: true },
+  iapActive: { type: Boolean, default: false },
 });
 const emit = defineEmits([
   "navigate",
@@ -152,6 +155,7 @@ const emit = defineEmits([
   "export-profile",
   "export-backup",
   "device-info",
+  "factory-reset",
 ]);
 
 const headerRoot = ref(null);
@@ -167,6 +171,7 @@ const navigation = [
   { id: "home", label: "Home", shortLabel: "Home", icon: Home },
   { id: "configurator", label: "Configurator", shortLabel: "Config", icon: SlidersHorizontal },
   { id: "calibration", label: "Quick Calibration", shortLabel: "Calibrate", icon: Gauge },
+  { id: "firmware", label: "Firmware Upgrade", shortLabel: "Upgrade", icon: UploadCloud },
   { id: "diagnostics", label: "Diagnostics", shortLabel: "Diagnostics", icon: Activity },
 ];
 

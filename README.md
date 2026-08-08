@@ -11,6 +11,21 @@ Configuration Mode 下手柄输入仍会继续，但同时进游戏可能导致�
 略微影响性能。完成配置后应点击 **Exit configuration mode**，恢复纯 DS4 descriptor
 后再进入游戏测试。
 
+## 固件升级与恢复
+
+导航中的 **Firmware Upgrade** 页面会先在浏览器本地验证 `.ps4fw` 的 Ed25519
+签名、CRC32、SHA-512、目标主控和解密结果，通过后才允许进入 IAP 和擦除应用分区。
+传输支持相同 sequence 最多三次重试、32 字节乱序块、4 KiB 页重试以及 bitmap
+缺块补传。签名有效的旧版本允许刷入，但页面会明确提示降级风险并要求确认。
+
+断电后按住 **PS + Options** 再接通电源，可在应用损坏或升级中断时强制进入
+`ProShock 4 IAP`。旧设备第一次安装 bootloader 仍必须使用 WCH-Link；网页无法从
+地址 0 的旧固件安全自举。页面中的 Factory Reset 会经过两次用户确认和设备 challenge，
+只擦除 Config A/B，不删除固件。
+
+签名打包、离线检查和 WCH-Link factory HEX 命令见主仓库的
+[`docs/iap-firmware.md`](../../docs/iap-firmware.md)。
+
 在线页面：<https://helloworldztr.github.io/proshock-config/>
 
 WebHID 需要安全上下文和 Chromium 系浏览器。在线页面使用 HTTPS；本地开发请通过
