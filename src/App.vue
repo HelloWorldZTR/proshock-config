@@ -114,10 +114,6 @@ import {
 } from "./services/import-export.js";
 import { CommandScheduler } from "./services/command-scheduler.js";
 import { createLiveInputSnapshot } from "./live-input.js";
-import {
-  createGamepadPreviewSnapshot,
-  isProShockPreviewGamepad,
-} from "./gamepad-preview.js";
 import { validateResolver } from "./resolver-schema.js";
 import {
   consumeCalibrationConfirmEdge,
@@ -241,14 +237,13 @@ const leaveGuardReturnFocus = ref(null);
 const defaultCalibration = createDefaultAnalogCalibration();
 const rawNames = ["LX", "LY", "RX", "RY", "L2", "R2"];
 const profileColors = ["#3080ff", "#30d158", "#ffb020", "#c05aff"];
+const PREVIEW_POLL_MS = 50;
 let rangeTimer = null;
 let centerTimer = null;
 let centerReturnCapture = null;
 let triggerTimer = null;
 let triggerCycleCapture = null;
-let gamepadPreviewFrame = 0;
-let gamepadPreviewIndex = null;
-let gamepadPreviewSequence = 0;
+let livePollTimer = null;
 const calibrationConfirmLatch = createCalibrationConfirmLatch();
 let calibrationConfirmActionActive = false;
 let digitalInputCommandSupported = null;
@@ -872,11 +867,10 @@ async function connectFlow() {
 }
 
 function stopSessionTimers() {
-  if (gamepadPreviewFrame) {
-    window.cancelAnimationFrame(gamepadPreviewFrame);
-    gamepadPreviewFrame = 0;
+  if (livePollTimer) {
+    window.clearInterval(livePollTimer);
+    livePollTimer = null;
   }
-  gamepadPreviewIndex = null;
 }
 
 async function disconnectDevice() {
@@ -1597,49 +1591,32 @@ async function pollAnalogSnapshot(syncRaw = false) {
   }
 }
 
-function findPreviewGamepad() {
-  const gamepads = Array.from(navigator.getGamepads?.() || []).filter(Boolean);
-  if (gamepadPreviewIndex !== null) {
-    const current = gamepads.find((gamepad) => (
-      gamepad.index === gamepadPreviewIndex && gamepad.connected
-    ));
-    if (current) return current;
+async function pollLiveState() {
+  if (
+    !connected.value
+    || client.busy
+    || centerCaptureActive.value
+    || rangeCaptureActive.value
+    || triggerCaptureActive.value
+    || calibrationConfirmActionActive
+  ) {
+    return;
   }
-  const matched = gamepads.find(isProShockPreviewGamepad) || null;
-  gamepadPreviewIndex = matched?.index ?? null;
-  return matched;
-}
-
-function pollGamepadPreview() {
-  gamepadPreviewFrame = 0;
-  if (!connected.value) return;
-  const gamepad = findPreviewGamepad();
-  if (gamepad?.axes?.length >= 4) {
-    const report = createGamepadPreviewSnapshot(gamepad);
-    gamepadPreviewSequence += 1;
-    latestRaw.value = {
-      ...latestRaw.value,
-      sequence: gamepadPreviewSequence,
-      buttons: report.buttons,
-      dpad_hat: report.dpad_hat,
-    };
-    analogSnapshot.value = {
-      ...analogSnapshot.value,
-      sequence: gamepadPreviewSequence,
-      hid: report.hid,
-      output_stick_q15: report.output_stick_q15,
-      output_trigger_q15: report.output_trigger_q15,
-    };
-    void handleCalibrationStageConfirm(latestRaw.value);
+  try {
+    const raw = await getRaw();
+    if (!await handleCalibrationStageConfirm(raw)) {
+      await pollAnalogSnapshot();
+    }
+  } catch (error) {
+    log(error.message);
   }
-  gamepadPreviewFrame = window.requestAnimationFrame(pollGamepadPreview);
 }
 
 function startSnapshotPolling() {
-  stopSessionTimers();
-  gamepadPreviewFrame = window.requestAnimationFrame(pollGamepadPreview);
-  /* Seed raw/calibrated fields once; ongoing preview uses interrupt IN. */
-  void pollAnalogSnapshot(true);
+  if (!livePollTimer) {
+    void pollLiveState();
+    livePollTimer = window.setInterval(pollLiveState, PREVIEW_POLL_MS);
+  }
 }
 
 function createFallbackProfile() {
