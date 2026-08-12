@@ -1,6 +1,6 @@
 export const RESOLVER_VERSION = 1;
 export const RESOLVER_OFFSET = 104;
-export const RESOLVER_SIZE = 152;
+export const RESOLVER_SIZE = 148;
 export const SOURCE_COUNT = 28;
 export const CONNECTED_SOURCE_COUNT = 26;
 export const OUTPUT_COUNT = 18;
@@ -89,7 +89,7 @@ export function createDefaultResolver() {
     layers: Array.from({ length: LAYER_COUNT }, () => ({ overrides: [] })),
     combos: [],
     macros: [],
-    reserved: new Uint8Array(12),
+    reserved: new Uint8Array(8),
   };
 }
 
@@ -320,5 +320,5 @@ export function writeResolver(
       stepOffset += 1;
     });
   });
-  payload.set(new Uint8Array(resolver.reserved || 12).slice(0, 12), baseOffset + 140);
+  payload.set(new Uint8Array(resolver.reserved || 8).slice(0, 8), baseOffset + 140);
 }

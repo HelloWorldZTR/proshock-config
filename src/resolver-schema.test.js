@@ -16,7 +16,7 @@ test("Resolver defaults and packed layout match the firmware contract", () => {
   writeResolver(payload, resolver);
   const parsed = parseResolver(payload);
   assert.equal(RESOLVER_OFFSET, 104);
-  assert.equal(RESOLVER_SIZE, 152);
+  assert.equal(RESOLVER_SIZE, 148);
   assert.equal(parsed.base_mapping[0], ACTION.GAMEPAD_FIRST);
   assert.equal(parsed.base_mapping[17], ACTION.GAMEPAD_FIRST + 17);
   assert.equal(parsed.base_mapping[18], ACTION.NONE);

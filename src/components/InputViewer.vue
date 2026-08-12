@@ -8,7 +8,7 @@
       <div class="sample-meta">
         <button type="button" :class="{ active: viewMode === 'processed' }" @click="viewMode = 'processed'">Processed</button>
         <button type="button" :class="{ active: viewMode === 'raw' }" @click="viewMode = 'raw'">Raw</button>
-        <span>{{ viewerHz }} Hz viewer</span>
+        <span>Input preview</span>
         <span>Seq {{ activeSequence }}</span>
       </div>
     </header>
@@ -52,7 +52,6 @@ const props = defineProps({
   snapshot: { type: Object, default: null },
   calibration: { type: Object, required: true },
   axisInvert: { type: Array, default: undefined },
-  viewerHz: { type: Number, default: 20 },
   sourceLabel: { type: String, default: "Processed input" },
   detailKind: { type: String, default: "" },
 });

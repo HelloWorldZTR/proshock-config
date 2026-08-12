@@ -197,7 +197,14 @@ label { display: grid; gap: 8px; color: var(--secondary); font-size: 13px; }
 .roundness-raw-grid b { color: var(--accent); font: 10px ui-monospace, monospace; }
 .roundness-raw-grid small { color: var(--muted); font: 8px ui-monospace, monospace; }
 .roundness-raw-grid input { width: 100%; min-width: 0; min-height: 32px; padding: 5px 6px; font: 11px ui-monospace, monospace; }
-.advanced-runtime-section { padding-top: 24px; border-top: 1px solid var(--border); }
+.advanced-bounds-section { display: grid; gap: 16px; padding-top: 24px; border-top: 1px solid var(--border); }
+.advanced-bounds-section > header p { margin: 5px 0 0; }
+.advanced-bounds-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.advanced-bounds-grid article { display: grid; gap: 10px; padding: 13px; border: 1px solid var(--border); background: rgba(255,255,255,.014); }
+.advanced-bounds-grid article > header { display: flex; justify-content: space-between; gap: 8px; padding-bottom: 9px; border-bottom: 1px solid var(--border); }
+.advanced-bounds-grid article > header span { color: var(--muted); font: 9px ui-monospace, monospace; }
+.advanced-bounds-grid label { display: grid; gap: 5px; color: var(--muted); font-size: 9px; }
+.advanced-bounds-grid input { width: 100%; min-width: 0; min-height: 32px; padding: 5px 7px; font: 11px ui-monospace, monospace; }
 .telemetry-band { display: grid; grid-template-columns: repeat(5, 1fr); min-height: 74px; margin: 0 max(-18px, -2vw); padding: 14px max(18px, 2vw); border-bottom: 1px solid var(--border); background: rgba(16,23,32,.46); }
 .telemetry-band > div { display: grid; align-content: center; gap: 5px; padding: 0 18px; border-right: 1px solid var(--border); }
 .telemetry-band span, .data-list dt { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
@@ -240,6 +247,7 @@ label { display: grid; gap: 8px; color: var(--secondary); font-size: 13px; }
   .lighting-editor { grid-template-columns: 1fr; }
   .lighting-preview { min-height: 220px; }
   .lighting-swatches { grid-template-columns: repeat(4, 1fr); }
+  .advanced-bounds-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .resolver-editor { min-width: 0; }

@@ -8,10 +8,10 @@
       <AxisTable :raw="raw" :snapshot="snapshot" />
     </div>
     <section v-else-if="section === 'poll'" class="form-section">
-      <header><h1>Poll rate monitor</h1><p>Configured, effective and viewer rates are deliberately kept separate.</p></header>
+      <header><h1>Poll rate monitor</h1><p>Configured and effective report rates are shown separately.</p></header>
       <dl class="data-list">
         <div><dt>Configured report rate</dt><dd>{{ configInfo?.pollrate_hz ? `${configInfo.pollrate_hz} Hz` : "—" }}</dd></div>
-        <div><dt>Viewer refresh</dt><dd>{{ connected ? "20 Hz" : "—" }}</dd></div>
+        <div><dt>Input preview</dt><dd>{{ connected ? "Available" : "—" }}</dd></div>
         <div><dt>Effective / jitter / skipped</dt><dd class="unsupported">Not supported by firmware</dd></div>
       </dl>
     </section>
@@ -20,6 +20,7 @@
       <dl class="data-list">
         <div><dt>Device</dt><dd>{{ deviceLabel }}</dd></div>
         <div><dt>Schema / profile / calibration</dt><dd>{{ configInfo?.schema_version ?? "—" }} / {{ profile?.profile_version ?? "—" }} / {{ calibration?.calibration_version ?? "—" }}</dd></div>
+        <div><dt>Runtime generation / validation flags</dt><dd>{{ snapshot?.runtime_generation ?? "—" }} / {{ snapshot?.validation_flags ?? "—" }}</dd></div>
         <div><dt>Firmware build / board / USB speed</dt><dd class="unsupported">Not supported by firmware</dd></div>
       </dl>
     </section>

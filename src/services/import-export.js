@@ -96,7 +96,7 @@ export function importProfile(envelope, targetIndex, baselineRaw = null) {
   if (baselineRaw) {
     const preserved = new Uint8Array(baselineRaw);
     const known = parseProfile(source, targetIndex);
-    known.resolver.reserved = preserved.slice(244, 256);
+    known.resolver.reserved = preserved.slice(244, 252);
     known.raw = preserved;
     writeProfileDraftToPayload(preserved, known, { allowReserved: true });
     return parseProfile(preserved, targetIndex);

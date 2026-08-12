@@ -24,6 +24,7 @@ function fixtureProfile() {
     profile_version: PROFILE_VERSION,
     flags: 3,
     color_rgb: [0x55, 0xd6, 0xff],
+    pollrate_hz: 4000,
     stick_response: [createLinearResponse(), createLinearResponse()],
     trigger_response: [createLinearResponse(), createLinearResponse()],
     raw,
@@ -49,6 +50,7 @@ test("Profile import preserves reserved bytes from target slot", () => {
   target.raw.fill(0xa5, 104);
   const imported = importProfile(envelope, 2, target.raw);
   assert.deepEqual(imported.color_rgb, [1, 2, 3]);
+  assert.equal(imported.pollrate_hz, 4000);
   assert.equal(imported.raw[250], 0xa5);
   assert.equal(imported.stick_shape[0].scale_q15[4], 45678);
 });

@@ -31,6 +31,7 @@ export const COMMAND = {
   COMMIT_ANALOG_CALIBRATION_WRITE: 0x10,
   GET_ANALOG_SNAPSHOT: 0x11,
   GET_DIGITAL_INPUT: 0x12,
+  SET_PROFILE_COLOR: 0x13,
   ENTER_IAP: 0x20,
 };
 
@@ -78,8 +79,8 @@ export const CONFIG_INFO_SIZE = 56;
 export const RAW_SIZE = 20;
 export const DIGITAL_INPUT_SIZE = 8;
 export const PROTOCOL_VERSION = 2;
-export const SCHEMA_VERSION = 7;
-export const PROFILE_VERSION = 4;
+export const SCHEMA_VERSION = 8;
+export const PROFILE_VERSION = 5;
 export const ANALOG_CALIBRATION_VERSION = 1;
 export const CURVE_POINT_COUNT = 9;
 export const CURVE_TYPE_PIECEWISE_LINEAR = 1;
@@ -91,6 +92,7 @@ export const ADC_MAX = 4095;
 const RESPONSE_SIZE = 24;
 const STICK_RESPONSE_OFFSET = 8;
 const TRIGGER_RESPONSE_OFFSET = 56;
+const PROFILE_POLL_RATE_OFFSET = 252;
 const STICK_SHAPE_OFFSET = 256;
 
 import {
@@ -191,6 +193,7 @@ export function parseProfile(payload, index = 0) {
     flags: view.getUint16(2, true),
     color_rgb: [payload[4], payload[5], payload[6]],
     reserved0: payload[7],
+    pollrate_hz: view.getUint32(PROFILE_POLL_RATE_OFFSET, true),
     stick_response: Array.from(
       { length: 2 },
       (_, responseIndex) => parseResponse(
@@ -240,6 +243,7 @@ export function writeProfileDraftToPayload(payload, draft, resolverOptions = {})
     undefined,
     resolverOptions,
   );
+  view.setUint32(PROFILE_POLL_RATE_OFFSET, Number(draft.pollrate_hz), true);
   STICKS.forEach((name, stickIndex) => {
     const values = draft.stick_shape?.[stickIndex]?.scale_q15
       || Array(ROUNDNESS_SECTOR_COUNT).fill(ROUNDNESS_Q15_ONE);
@@ -514,6 +518,10 @@ export function makeBeginProfilePayload(profileIndex) {
 
 export function makeSwitchProfilePayload(profileIndex, setBoot = false) {
   return new Uint8Array([profileIndex, setBoot ? 1 : 0]);
+}
+
+export function makeProfileColorPayload(profileIndex, rgb) {
+  return new Uint8Array([profileIndex, ...rgb]);
 }
 
 export function makeGlobalConfigPayload(pollrateHz, bootProfile, featureFlags = 0) {

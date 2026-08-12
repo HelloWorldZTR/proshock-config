@@ -5,7 +5,8 @@
         ref="profileTrigger"
         type="button"
         class="profile-quick-trigger"
-        :disabled="!connected || busy"
+        :disabled="!connected || busy || profileSwitchBlocked"
+        :title="profileSwitchBlocked ? 'Save before switching Profiles' : 'Switch active Profile'"
         aria-haspopup="menu"
         :aria-expanded="profileOpen"
         aria-label="Switch active Profile"
@@ -140,6 +141,7 @@ const props = defineProps({
   profileDraftChanged: { type: Boolean, default: false },
   connected: { type: Boolean, default: false },
   busy: { type: Boolean, default: false },
+  profileSwitchBlocked: { type: Boolean, default: false },
   disconnecting: { type: Boolean, default: false },
   currentPage: { type: String, default: "home" },
   state: { type: Object, required: true },

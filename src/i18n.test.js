@@ -41,3 +41,43 @@ test("firmware progress safety warning is available in Chinese", () => {
     "返回固件选择",
   );
 });
+
+test("right-corner notifications are available in Chinese", () => {
+  const notifications = [
+    "Profile exported without physical calibration.",
+    "Full device backup exported.",
+    "Profile imported to Slot 2 as a draft.",
+    "Controller reconnected. Unsaved work was preserved.",
+    "WebHID disconnected. The game controller remains available.",
+    "WebHID disconnected. Unsaved work was preserved in this page.",
+    "WebHID disconnected. The game controller may remain available.",
+    "Draft applied to firmware RAM.",
+    "Configuration saved and verified.",
+    "Applied changes were rolled back to the saved configuration.",
+    "This browser does not support WebHID.",
+    "The selected controller does not expose configuration Feature Report 0xF0.",
+    "Device is not connected.",
+    "Another request is already in flight.",
+    "Timed out waiting for WebHID response.",
+    "Drained stale WebHID transaction 7 while waiting for 8.",
+    "Unexpected WebHID protocol version 3.",
+    "Unexpected WebHID response 0x10 while waiting for 0x11.",
+    "Chunk metadata mismatch.",
+    "Profile file is not valid JSON.",
+    "File is not a ProShock document.",
+    "Unknown file format.",
+    "This file was created by a newer tool version.",
+    "File checksum does not match.",
+    "Choose a Profile file, not a full device backup.",
+    "Profile must be 668 bytes.",
+    "Profile version requires an explicit migration.",
+    "Profile contains an invalid response curve.",
+    "Profile contains an invalid Resolver configuration.",
+    "command 0x14: BAD_CONFIG",
+    "Unexpected analog snapshot size: 52",
+  ];
+
+  notifications.forEach((message) => {
+    assert.notEqual(translate(message, "zh-CN"), message, message);
+  });
+});

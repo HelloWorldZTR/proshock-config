@@ -5,7 +5,7 @@
       :active="configInfo?.active_profile"
       :boot="configInfo?.boot_profile"
       :selected="selectedProfile"
-      :disabled="!connected || busy"
+      :disabled="!connected || busy || profileSwitchBlocked"
       @select="$emit('switch-profile', $event)"
       @edit="$emit('edit-profile', $event)"
     />
@@ -28,7 +28,7 @@
     <section class="telemetry-band">
       <div><span>Configured</span><strong>{{ configInfo?.pollrate_hz ? `${configInfo.pollrate_hz} Hz` : "—" }}</strong></div>
       <div><span>Effective rate</span><strong class="unsupported">Not supported by firmware</strong></div>
-      <div><span>Viewer refresh</span><strong>{{ connected ? "20 Hz" : "—" }}</strong></div>
+      <div><span>Stick precision</span><strong>4096</strong></div>
       <div><span>Config state</span><strong>{{ stateLabel }}</strong></div>
       <div><span>ADC</span><strong>{{ snapshot?.adc_running ? "Running" : "—" }}</strong></div>
     </section>
@@ -47,7 +47,8 @@ const controllerIcon = controllerIconSource.replace(
 );
 
 defineProps({
-  connected: Boolean, busy: Boolean, profiles: Array, configInfo: Object,
+  connected: Boolean, busy: Boolean, profileSwitchBlocked: Boolean,
+  profiles: Array, configInfo: Object,
   selectedProfile: Number, raw: Object, snapshot: Object, calibration: Object,
   stateLabel: String,
 });

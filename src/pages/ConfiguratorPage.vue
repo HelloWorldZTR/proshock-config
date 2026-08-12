@@ -111,21 +111,42 @@
     <div v-else class="advanced-canvas">
       <header class="page-heading">
         <h1>Advanced</h1>
-        <p>Fine-tune the current Profile's stick shape or inspect protocol and runtime information.</p>
+        <p>Fine-tune the current Profile's stick shape and raw input bounds.</p>
       </header>
       <StickRoundnessEditor
         :profile="profile"
         @update="$emit('stick-shape', $event)"
       />
-      <section class="form-section advanced-runtime-section">
-        <header><h2>Runtime information</h2><p>Read-only firmware state.</p></header>
-        <dl class="data-list">
-          <div><dt>Schema</dt><dd>{{ configInfo?.schema_version ?? "—" }}</dd></div>
-          <div><dt>Profile version</dt><dd>{{ profile?.profile_version ?? "—" }}</dd></div>
-          <div><dt>Calibration version</dt><dd>{{ calibration?.calibration_version ?? "—" }}</dd></div>
-          <div><dt>Runtime generation</dt><dd>{{ snapshot?.runtime_generation ?? "—" }}</dd></div>
-          <div><dt>Validation flags</dt><dd>{{ snapshot?.validation_flags ?? "—" }}</dd></div>
-        </dl>
+      <section class="advanced-bounds-section">
+        <header>
+          <h2>Stick and trigger raw bounds</h2>
+          <p>Edit the device-level ADC endpoints. Stick centers remain owned by calibration.</p>
+        </header>
+        <div class="advanced-bounds-grid">
+          <article v-for="(axis, index) in calibration?.axis || []" :key="axis.name">
+            <header><strong>{{ axis.name }}</strong><span>Center {{ axis.raw_center }}</span></header>
+            <label><span>Lower bound</span>
+              <input type="number" min="0" max="4095" :value="axis.raw_min"
+                @change="$emit('calibration-bound', { kind: 'axis', index, field: 'raw_min', value: $event.target.value })">
+            </label>
+            <label><span>Upper bound</span>
+              <input type="number" min="0" max="4095" :value="axis.raw_max"
+                @change="$emit('calibration-bound', { kind: 'axis', index, field: 'raw_max', value: $event.target.value })">
+            </label>
+          </article>
+          <article v-for="(trigger, index) in calibration?.trigger || []" :key="trigger.name">
+            <header><strong>{{ trigger.name }}</strong><span>Trigger</span></header>
+            <label><span>Lower bound</span>
+              <input type="number" min="0" max="4095" :value="trigger.raw_released"
+                @change="$emit('calibration-bound', { kind: 'trigger', index, field: 'raw_released', value: $event.target.value })">
+            </label>
+            <label><span>Upper bound</span>
+              <input type="number" min="0" max="4095" :value="trigger.raw_pressed"
+                @change="$emit('calibration-bound', { kind: 'trigger', index, field: 'raw_pressed', value: $event.target.value })">
+            </label>
+          </article>
+        </div>
+        <p class="support-note">Stick bounds must remain at least 128 ADC counts away from the calibrated center. Trigger lower bounds must remain below upper bounds. Apply updates RAM; Save is required before switching slots.</p>
       </section>
     </div>
   </div>
@@ -144,7 +165,7 @@ const props = defineProps({
   snapshot: Object, calibration: Object, configInfo: Object,
   connected: Boolean, readDigitalInput: Function,
 });
-defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "stick-shape", "reset-curves", "copy-curve", "calibrate"]);
+defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "stick-shape", "calibration-bound", "reset-curves", "copy-curve", "calibrate"]);
 const tabs = [
   { id: "general", label: "General" }, { id: "sticks", label: "Sticks" },
   { id: "triggers", label: "Triggers" }, { id: "buttons", label: "Buttons" },

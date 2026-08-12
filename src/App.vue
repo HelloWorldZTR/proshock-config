@@ -9,6 +9,7 @@
       :profile-draft-changed="profileChanged"
       :connected="connected"
       :busy="busy || iapMode"
+      :profile-switch-blocked="hasUnsaved"
       :disconnecting="disconnecting"
       :current-page="iapMode ? 'firmware' : page"
       :state="headerState"
@@ -26,7 +27,8 @@
     />
     <HomePage
       v-if="page === 'home' && !iapMode"
-      :connected="connected" :busy="busy" :profiles="profileCards" :config-info="configInfo"
+      :connected="connected" :busy="busy" :profile-switch-blocked="hasUnsaved"
+      :profiles="profileCards" :config-info="configInfo"
       :selected-profile="selectedProfile" :raw="latestRaw" :snapshot="liveInputSnapshot"
       :calibration="calibrationDraft || defaultCalibration" :state-label="stateLabel"
       @connect="connectFlow" @switch-profile="requestProfileSwitch" @edit-profile="requestEditProfile"
@@ -40,6 +42,7 @@
       :connected="connected" :read-digital-input="getDigitalInput"
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
       @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event"
+      @calibration-bound="setCalibrationBound"
       @response="setResponse" @resolver="setResolver" @stick-shape="setStickShape"
       @reset-curves="resetCurves" @copy-curve="copyCurve"
       @calibrate="requestGo('calibration')"
@@ -136,6 +139,7 @@ import {
   makeGlobalConfigPayload,
   makeProfileChunkRequest,
   makeProfileChunkWrite,
+  makeProfileColorPayload,
   makeSwitchProfilePayload,
   makeVersionPayload,
   parseAnalogCalibration,
@@ -182,7 +186,6 @@ const deviceLabel = ref("Disconnected");
 const configInfo = ref(null);
 const lastStatus = ref(null);
 const selectedProfile = ref(0);
-const pollrateHz = ref("1000");
 const bootProfile = ref(0);
 const profileDraft = ref(null);
 const calibrationDraft = ref(null);
@@ -249,6 +252,14 @@ let calibrationConfirmActionActive = false;
 let digitalInputCommandSupported = null;
 let pendingNavigation = null;
 let currentRouteHash = "";
+let busyDepth = 0;
+
+const pollrateHz = computed({
+  get: () => String(profileDraft.value?.pollrate_hz ?? configInfo.value?.pollrate_hz ?? 1000),
+  set: (value) => {
+    if (profileDraft.value) profileDraft.value.pollrate_hz = Number(value);
+  },
+});
 
 /*
  * Processed values must come from one firmware-owned analog snapshot. Raw
@@ -290,18 +301,28 @@ const profileChanged = computed(() => (
     ? JSON.stringify(profileDraft.value) !== JSON.stringify(profileBackup.value)
     : false
 ));
+const profileColorOnlyChanged = computed(() => {
+  if (!profileChanged.value) return false;
+  const draft = clone(profileDraft.value);
+  draft.color_rgb = clone(profileBackup.value.color_rgb);
+  return JSON.stringify(draft) === JSON.stringify(profileBackup.value);
+});
 const globalChanged = computed(() => !!configInfo.value && (
-  String(configInfo.value.pollrate_hz) !== String(pollrateHz.value)
-  || configInfo.value.boot_profile !== bootProfile.value
+  configInfo.value.boot_profile !== bootProfile.value
 ));
 const calibrationChanged = computed(() => (
   calibrationDraft.value && calibrationBackup.value
     ? JSON.stringify(calibrationDraft.value) !== JSON.stringify(calibrationBackup.value)
     : false
 ));
-const hasApplyDraft = computed(() => profileChanged.value || globalChanged.value);
+const calibrationDraftCanApply = computed(() => (
+  calibrationChanged.value && page.value !== "calibration"
+));
+const hasApplyDraft = computed(() => (
+  profileChanged.value || globalChanged.value || calibrationDraftCanApply.value
+));
 const hasDraft = computed(() => profileChanged.value || globalChanged.value || calibrationChanged.value);
-const applyValid = computed(() => responseValid.value && resolverValid.value);
+const applyValid = computed(() => responseValid.value && resolverValid.value && calibrationValidation.value.pass);
 const canApply = computed(() => (
   connected.value
   && !busy.value
@@ -454,6 +475,25 @@ function notify(message) {
   }, 3000);
 }
 
+function beginBusy() {
+  busyDepth += 1;
+  busy.value = true;
+}
+
+function endBusy() {
+  busyDepth = Math.max(0, busyDepth - 1);
+  busy.value = busyDepth > 0;
+}
+
+async function runBusyOperation(operation) {
+  beginBusy();
+  try {
+    return await operation();
+  } finally {
+    endBusy();
+  }
+}
+
 function routeHash(nextPage, section = null) {
   const nextConfiguratorSection = nextPage === "configurator"
     ? section || configuratorSection.value
@@ -584,6 +624,10 @@ function requestEditProfile(index) {
     performGo("configurator", "general");
     return;
   }
+  if (hasUnsaved.value) {
+    notify("Save the current configuration before switching Profiles.");
+    return;
+  }
   requestNavigation(async () => {
     if (!await switchProfile(index)) {
       return;
@@ -614,6 +658,16 @@ function setStickShape({ stickIndex, sector, scaleQ15 }) {
     return;
   }
   scales[sector] = scaleQ15;
+}
+
+function setCalibrationBound({ kind = "axis", index, axis, field, value }) {
+  const targetIndex = index ?? axis;
+  const fields = kind === "trigger"
+    ? ["raw_released", "raw_pressed"]
+    : ["raw_min", "raw_max"];
+  const target = calibrationDraft.value?.[kind]?.[targetIndex];
+  if (!target || !fields.includes(field)) return;
+  target[field] = Math.max(0, Math.min(4095, Math.round(Number(value))));
 }
 
 function resetCurves(kind) {
@@ -668,7 +722,12 @@ async function importProfileFile(event) {
   try {
     const file = event.target.files?.[0];
     if (!file) return;
-    const envelope = JSON.parse(await file.text());
+    let envelope;
+    try {
+      envelope = JSON.parse(await file.text());
+    } catch {
+      throw new Error("Profile file is not valid JSON.");
+    }
     const imported = parseImportedProfile(envelope, selectedProfile.value, profileDraft.value?.raw);
     const before = profileDraft.value;
     const diff = [
@@ -711,7 +770,7 @@ function expectOk(packet, operation) {
 
 async function command(commandId, payload = new Uint8Array(), showBusy = true) {
   if (showBusy) {
-    busy.value = true;
+    beginBusy();
   }
   try {
     const packet = await scheduler.enqueue(
@@ -722,7 +781,7 @@ async function command(commandId, payload = new Uint8Array(), showBusy = true) {
     return packet;
   } finally {
     if (showBusy) {
-      busy.value = false;
+      endBusy();
     }
   }
 }
@@ -818,6 +877,22 @@ async function writeProfile() {
   };
 }
 
+async function writeProfileColor() {
+  const packet = await command(
+    COMMAND.SET_PROFILE_COLOR,
+    makeProfileColorPayload(selectedProfile.value, profileDraft.value.color_rgb),
+  );
+  configInfo.value = parseConfigInfo(packet.payload);
+  const bytes = new Uint8Array(profileDraft.value.raw);
+  writeProfileDraftToPayload(bytes, profileDraft.value);
+  profileDraft.value = parseProfile(bytes, selectedProfile.value);
+  profileBackup.value = clone(profileDraft.value);
+  appliedChangeKinds.value = {
+    ...appliedChangeKinds.value,
+    profile: true,
+  };
+}
+
 function captureSavedBaselines(available = true) {
   savedProfileBaseline.value = profileDraft.value
     ? clone(profileDraft.value)
@@ -827,7 +902,6 @@ function captureSavedBaselines(available = true) {
     : null;
   savedGlobalBaseline.value = configInfo.value
     ? {
-        pollrate_hz: String(configInfo.value.pollrate_hz),
         boot_profile: configInfo.value.boot_profile,
         feature_flags: configInfo.value.feature_flags,
       }
@@ -842,7 +916,7 @@ function captureSavedBaselines(available = true) {
 
 async function connectFlow() {
   try {
-    busy.value = true;
+    beginBusy();
     const device = await client.connect();
     if (!device) {
       return;
@@ -862,7 +936,7 @@ async function connectFlow() {
     log(error.message);
     notify(error.message);
   } finally {
-    busy.value = false;
+    endBusy();
   }
 }
 
@@ -909,7 +983,6 @@ async function refreshAll() {
     const statusPacket = await command(COMMAND.GET_STATUS);
     lastStatus.value = parseStatus(statusPacket.payload);
     selectedProfile.value = configInfo.value.active_profile;
-    pollrateHz.value = String(configInfo.value.pollrate_hz);
     bootProfile.value = configInfo.value.boot_profile;
     profileDraft.value = await readProfile(selectedProfile.value);
     calibrationDraft.value = await readCalibration();
@@ -931,26 +1004,34 @@ async function refreshAll() {
 }
 
 async function switchProfile(index) {
-  try {
-    const packet = await command(COMMAND.SWITCH_PROFILE, makeSwitchProfilePayload(index));
-    configInfo.value = parseConfigInfo(packet.payload);
-    selectedProfile.value = index;
-    profileDraft.value = await readProfile(index);
-    profileBackup.value = clone(profileDraft.value);
-    if (!configInfo.value?.dirty) {
-      savedProfileBaseline.value = clone(profileDraft.value);
-      savedBaselineAvailable.value = true;
+  return runBusyOperation(async () => {
+    try {
+      const packet = await command(COMMAND.SWITCH_PROFILE, makeSwitchProfilePayload(index));
+      const nextInfo = parseConfigInfo(packet.payload);
+      const nextProfile = await readProfile(index);
+      configInfo.value = nextInfo;
+      selectedProfile.value = index;
+      profileDraft.value = nextProfile;
+      profileBackup.value = clone(nextProfile);
+      if (!nextInfo.dirty) {
+        savedProfileBaseline.value = clone(nextProfile);
+        savedBaselineAvailable.value = true;
+      }
+      return true;
+    } catch (error) {
+      log(error.message);
+      notify(error.message);
+      return false;
     }
-    return true;
-  } catch (error) {
-    log(error.message);
-    notify(error.message);
-    return false;
-  }
+  });
 }
 
 function requestProfileSwitch(index) {
   if (index === selectedProfile.value) return;
+  if (hasUnsaved.value) {
+    notify("Save the current configuration before switching Profiles.");
+    return;
+  }
   requestNavigation(async () => {
     if (await switchProfile(index)) {
       performGo(
@@ -964,29 +1045,35 @@ function requestProfileSwitch(index) {
 }
 
 async function applyDraft() {
-  try {
-    if (!canApply.value) return false;
-    if (globalChanged.value) {
-      const packet = await command(
-        COMMAND.SET_GLOBAL_CONFIG,
-        makeGlobalConfigPayload(pollrateHz.value, bootProfile.value, configInfo.value.feature_flags),
-      );
-      configInfo.value = parseConfigInfo(packet.payload);
-      appliedChangeKinds.value = {
-        ...appliedChangeKinds.value,
-        global: true,
-      };
+  if (!canApply.value) return false;
+  return runBusyOperation(async () => {
+    try {
+      if (globalChanged.value) {
+        const packet = await command(
+          COMMAND.SET_GLOBAL_CONFIG,
+          makeGlobalConfigPayload(profileDraft.value.pollrate_hz, bootProfile.value, configInfo.value.feature_flags),
+        );
+        configInfo.value = parseConfigInfo(packet.payload);
+        appliedChangeKinds.value = {
+          ...appliedChangeKinds.value,
+          global: true,
+        };
+      }
+      if (profileChanged.value) {
+        if (profileColorOnlyChanged.value) await writeProfileColor();
+        else await writeProfile();
+      }
+      if (calibrationChanged.value) await writeCalibration();
+      profileBackup.value = clone(profileDraft.value);
+      await pollAnalogSnapshot();
+      notify("Draft applied to firmware RAM.");
+      return true;
+    } catch (error) {
+      log(error.message);
+      notify(error.message);
+      return false;
     }
-    if (profileChanged.value) await writeProfile();
-    profileBackup.value = clone(profileDraft.value);
-    await pollAnalogSnapshot();
-    notify("Draft applied to firmware RAM.");
-    return true;
-  } catch (error) {
-    log(error.message);
-    notify(error.message);
-    return false;
-  }
+  });
 }
 
 async function saveConfig() {
@@ -1046,7 +1133,6 @@ function restoreLocalBaselines() {
     calibrationDraft.value = clone(calibrationBackup.value);
   }
   if (configInfo.value) {
-    pollrateHz.value = String(configInfo.value.pollrate_hz);
     bootProfile.value = configInfo.value.boot_profile;
   }
   resetCalibrationProgress();
@@ -1069,7 +1155,8 @@ async function rollbackAppliedChanges() {
       const packet = await command(
         COMMAND.SET_GLOBAL_CONFIG,
         makeGlobalConfigPayload(
-          savedGlobalBaseline.value.pollrate_hz,
+          savedProfileBaseline.value?.pollrate_hz
+            ?? profileDraft.value.pollrate_hz,
           savedGlobalBaseline.value.boot_profile,
           savedGlobalBaseline.value.feature_flags,
         ),
@@ -1095,7 +1182,6 @@ async function rollbackAppliedChanges() {
     lastStatus.value = parseStatus(savePacket.payload);
     const infoPacket = await command(COMMAND.GET_CONFIG_INFO);
     configInfo.value = parseConfigInfo(infoPacket.payload);
-    pollrateHz.value = savedGlobalBaseline.value.pollrate_hz;
     bootProfile.value = savedGlobalBaseline.value.boot_profile;
     profileDraft.value = savedProfileBaseline.value
       ? clone(savedProfileBaseline.value)
@@ -1626,6 +1712,7 @@ function createFallbackProfile() {
     profile_version: PROFILE_VERSION,
     flags: 0,
     color_rgb: [0x30, 0x80, 0xff],
+    pollrate_hz: 1000,
     stick_response: [createLinearResponse(), createLinearResponse()],
     trigger_response: [createLinearResponse(), createLinearResponse()],
     raw,

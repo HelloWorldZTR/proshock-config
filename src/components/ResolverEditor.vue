@@ -730,7 +730,7 @@ function cloneResolver() {
     layers: resolver.value.layers.map((layer) => ({ ...layer, overrides: layer.overrides.map((entry) => ({ ...entry })) })),
     combos: resolver.value.combos.map((combo) => ({ ...combo })),
     macros: resolver.value.macros.map((macro) => ({ ...macro, steps: macro.steps.map((step) => ({ ...step })) })),
-    reserved: new Uint8Array(resolver.value.reserved || 12),
+    reserved: new Uint8Array(resolver.value.reserved || 8),
   };
 }
 function commit(mutator) { const next = cloneResolver(); mutator(next); emit("update", next); }

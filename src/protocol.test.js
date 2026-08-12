@@ -4,14 +4,22 @@ import {
   CONFIG_INFO_SIZE,
   LEGACY_CONFIG_INFO_SIZE,
   digitalMaskFromRawInput,
+  makeProfileColorPayload,
   parseConfigInfo,
   parseDigitalInput,
 } from "./protocol.js";
 
+test("profile color Apply uses one indexed RGB payload", () => {
+  assert.deepEqual(
+    makeProfileColorPayload(2, [0x12, 0x34, 0x56]),
+    new Uint8Array([2, 0x12, 0x34, 0x56]),
+  );
+});
+
 function configInfoPayload(size) {
   const payload = new Uint8Array(size);
   const view = new DataView(payload.buffer);
-  view.setUint16(0, 7, true);
+  view.setUint16(0, 8, true);
   view.setUint16(2, 320, true);
   payload[4] = 4;
   return payload;
