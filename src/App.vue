@@ -43,7 +43,7 @@
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
       @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event"
       @calibration-bound="setCalibrationBound"
-      @response="setResponse" @resolver="setResolver" @stick-shape="setStickShape"
+      @response="setResponse" @resolver="setResolver" @stick-shape="setStickShape" @stick-rc="setStickRc"
       @reset-curves="resetCurves" @copy-curve="copyCurve"
       @calibrate="requestGo('calibration')"
     />
@@ -133,6 +133,7 @@ import {
   PROFILE_VERSION,
   STATUS_NAME,
   createDefaultAnalogCalibration,
+  createDefaultStickRc,
   createLinearResponse,
   digitalMaskFromRawInput,
   makeBeginProfilePayload,
@@ -173,6 +174,7 @@ import {
   validateResponse,
 } from "./calibration.js";
 import { WebHidClient } from "./webhid-client.js";
+import { validateStickRc } from "./rc-filter.js";
 
 const client = new WebHidClient();
 const scheduler = new CommandScheduler();
@@ -281,6 +283,10 @@ const resolverValid = computed(() => (
     ? validateResolver(profileDraft.value.resolver).length === 0
     : false
 ));
+const rcValid = computed(() => (
+  profileDraft.value?.stick_rc?.length === 2
+  && profileDraft.value.stick_rc.every(validateStickRc)
+));
 const profileCards = computed(() => Array.from({ length: PROFILE_COUNT }, (_, index) => ({
   index,
   hex: (
@@ -322,7 +328,7 @@ const hasApplyDraft = computed(() => (
   profileChanged.value || globalChanged.value || calibrationDraftCanApply.value
 ));
 const hasDraft = computed(() => profileChanged.value || globalChanged.value || calibrationChanged.value);
-const applyValid = computed(() => responseValid.value && resolverValid.value && calibrationValidation.value.pass);
+const applyValid = computed(() => responseValid.value && resolverValid.value && rcValid.value && calibrationValidation.value.pass);
 const canApply = computed(() => (
   connected.value
   && !busy.value
@@ -658,6 +664,13 @@ function setStickShape({ stickIndex, sector, scaleQ15 }) {
     return;
   }
   scales[sector] = scaleQ15;
+}
+
+function setStickRc({ stickIndex, value }) {
+  if (!profileDraft.value?.stick_rc?.[stickIndex] || !validateStickRc(value)) {
+    return;
+  }
+  profileDraft.value.stick_rc[stickIndex] = value;
 }
 
 function setCalibrationBound({ kind = "axis", index, axis, field, value }) {
@@ -1715,6 +1728,7 @@ function createFallbackProfile() {
     pollrate_hz: 1000,
     stick_response: [createLinearResponse(), createLinearResponse()],
     trigger_response: [createLinearResponse(), createLinearResponse()],
+    stick_rc: [createDefaultStickRc(), createDefaultStickRc()],
     raw,
   };
   writeProfileDraftToPayload(raw, profile);

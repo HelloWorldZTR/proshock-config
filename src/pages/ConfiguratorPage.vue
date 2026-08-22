@@ -57,6 +57,15 @@
         source-label="Firmware processed input"
       />
     </div>
+    <RCFilterEditor
+      v-else-if="section === 'rc'"
+      :profile="profile"
+      :raw="raw"
+      :snapshot="snapshot"
+      :calibration="calibration"
+      :axis-invert="configInfo?.axis_invert"
+      @update="$emit('stick-rc', $event)"
+    />
     <ResolverEditor
       v-else-if="section === 'buttons'"
       :resolver="profile?.resolver"
@@ -156,6 +165,7 @@
 import { computed } from "vue";
 import CurveEditor from "../CurveEditor.vue";
 import InputViewer from "../components/InputViewer.vue";
+import RCFilterEditor from "../components/RCFilterEditor.vue";
 import ResolverEditor from "../components/ResolverEditor.vue";
 import StickRoundnessEditor from "../components/StickRoundnessEditor.vue";
 
@@ -165,10 +175,11 @@ const props = defineProps({
   snapshot: Object, calibration: Object, configInfo: Object,
   connected: Boolean, readDigitalInput: Function,
 });
-defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "stick-shape", "calibration-bound", "reset-curves", "copy-curve", "calibrate"]);
+defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "stick-shape", "stick-rc", "calibration-bound", "reset-curves", "copy-curve", "calibrate"]);
 const tabs = [
   { id: "general", label: "General" }, { id: "sticks", label: "Sticks" },
-  { id: "triggers", label: "Triggers" }, { id: "buttons", label: "Buttons" },
+  { id: "triggers", label: "Triggers" }, { id: "rc", label: "RC" },
+  { id: "buttons", label: "Buttons" },
   { id: "lighting", label: "Lighting" }, { id: "advanced", label: "Advanced" },
 ];
 const profileRgb = computed(() => props.profile?.color_rgb || [48, 128, 255]);

@@ -19,8 +19,8 @@ test("profile color Apply uses one indexed RGB payload", () => {
 function configInfoPayload(size) {
   const payload = new Uint8Array(size);
   const view = new DataView(payload.buffer);
-  view.setUint16(0, 8, true);
-  view.setUint16(2, 320, true);
+  view.setUint16(0, 9, true);
+  view.setUint16(2, 384, true);
   payload[4] = 4;
   return payload;
 }

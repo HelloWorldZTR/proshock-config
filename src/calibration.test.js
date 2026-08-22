@@ -6,6 +6,7 @@ import {
   PROFILE_SIZE,
   PROFILE_VERSION,
   createDefaultAnalogCalibration,
+  createDefaultStickRc,
   createLinearResponse,
   parseAnalogCalibration,
   parseAnalogSnapshot,
@@ -451,6 +452,7 @@ test("profile and analog payload round trips preserve fixed sizes", () => {
       { name: "Left stick", scale_q15: Array(16).fill(32768) },
       { name: "Right stick", scale_q15: Array(16).fill(32768) },
     ],
+    stick_rc: [createDefaultStickRc(), createDefaultStickRc()],
   };
   profile.stick_shape[0].scale_q15[12] = 12345;
   writeProfileDraftToPayload(profileBytes, profile);
@@ -461,6 +463,8 @@ test("profile and analog payload round trips preserve fixed sizes", () => {
   assert.equal(parsedProfile.raw[250], 0);
   assert.equal(parsedProfile.stick_shape[0].scale_q15[12], 12345);
   assert.equal(parsedProfile.stick_shape[1].scale_q15[15], 32768);
+  assert.equal(parsedProfile.stick_rc[0].smoothing_alpha_q15, 5825);
+  assert.equal(parsedProfile.stick_rc[1].boost_gain_q8_8, 64);
 
   const calibrationBytes = new Uint8Array(ANALOG_CALIBRATION_SIZE);
   calibrationBytes.fill(0x5a);

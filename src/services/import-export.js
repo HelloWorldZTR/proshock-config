@@ -1,12 +1,16 @@
 import {
   ANALOG_CALIBRATION_SIZE,
+  LEGACY_PROFILE_SIZE,
+  LEGACY_PROFILE_VERSION,
   PROFILE_SIZE,
   PROFILE_VERSION,
   SCHEMA_VERSION,
   parseProfile,
+  migrateLegacyProfilePayload,
   writeProfileDraftToPayload,
 } from "../protocol.js";
 import { validateResponse } from "../calibration.js";
+import { validateStickRc } from "../rc-filter.js";
 import { validateResolver } from "../resolver-schema.js";
 
 export const PROFILE_FORMAT = "proshock4/profile";
@@ -83,15 +87,27 @@ export function validateEnvelope(envelope) {
 export function importProfile(envelope, targetIndex, baselineRaw = null) {
   validateEnvelope(envelope);
   if (envelope.format !== PROFILE_FORMAT) throw new Error("Choose a Profile file, not a full device backup.");
-  const source = base64ToBytes(envelope.payload.profile_bytes);
-  if (source.byteLength !== PROFILE_SIZE) throw new Error(`Profile must be ${PROFILE_SIZE} bytes.`);
-  if (envelope.payload.profile_version !== PROFILE_VERSION) throw new Error("Profile version requires an explicit migration.");
+  let source = base64ToBytes(envelope.payload.profile_bytes);
+  if (
+    envelope.payload.profile_version === LEGACY_PROFILE_VERSION
+    && source.byteLength === LEGACY_PROFILE_SIZE
+  ) {
+    source = migrateLegacyProfilePayload(source);
+  } else if (
+    envelope.payload.profile_version !== PROFILE_VERSION
+    || source.byteLength !== PROFILE_SIZE
+  ) {
+    throw new Error("Profile version requires an explicit migration.");
+  }
   const imported = parseProfile(source, targetIndex);
   if (![...imported.stick_response, ...imported.trigger_response].every(validateResponse)) {
     throw new Error("Profile contains an invalid response curve.");
   }
   if (validateResolver(imported.resolver).length) {
     throw new Error("Profile contains an invalid Resolver configuration.");
+  }
+  if (!imported.stick_rc.every(validateStickRc)) {
+    throw new Error("Profile contains invalid RC filter settings.");
   }
   if (baselineRaw) {
     const preserved = new Uint8Array(baselineRaw);
@@ -104,6 +120,32 @@ export function importProfile(envelope, targetIndex, baselineRaw = null) {
   return imported;
 }
 
+function importBackupProfile(payload, index) {
+  let source = base64ToBytes(payload.profile_bytes);
+  if (
+    payload.profile_version === LEGACY_PROFILE_VERSION
+    && source.byteLength === LEGACY_PROFILE_SIZE
+  ) {
+    source = migrateLegacyProfilePayload(source);
+  } else if (
+    payload.profile_version !== PROFILE_VERSION
+    || source.byteLength !== PROFILE_SIZE
+  ) {
+    throw new Error(`Backup Profile ${index + 1} requires an explicit migration.`);
+  }
+  const profile = parseProfile(source, index);
+  if (![...profile.stick_response, ...profile.trigger_response].every(validateResponse)) {
+    throw new Error(`Backup Profile ${index + 1} contains an invalid response curve.`);
+  }
+  if (validateResolver(profile.resolver).length) {
+    throw new Error(`Backup Profile ${index + 1} contains an invalid Resolver configuration.`);
+  }
+  if (!profile.stick_rc.every(validateStickRc)) {
+    throw new Error(`Backup Profile ${index + 1} contains invalid RC filter settings.`);
+  }
+  return profile;
+}
+
 export function validateBackup(envelope) {
   validateEnvelope(envelope);
   if (envelope.format !== BACKUP_FORMAT) throw new Error("Choose a full device backup.");
@@ -112,5 +154,9 @@ export function validateBackup(envelope) {
   }
   const calibration = base64ToBytes(envelope.payload.calibration_bytes);
   if (calibration.byteLength !== ANALOG_CALIBRATION_SIZE) throw new Error("Calibration payload length is invalid.");
-  return envelope;
+  return {
+    envelope,
+    profiles: envelope.payload.profiles.map(importBackupProfile),
+    calibration,
+  };
 }

@@ -67,7 +67,8 @@ export const CONFIG_PACKET_SIZE = 63;
 export const CONFIG_HEADER_SIZE = 7;
 export const IAP_PACKET_SIZE = 64;
 export const PAYLOAD_SIZE = 56;
-export const PROFILE_SIZE = 320;
+export const LEGACY_PROFILE_SIZE = 320;
+export const PROFILE_SIZE = 384;
 export const PROFILE_CHUNK_DATA_SIZE = 48;
 export const PROFILE_CHUNK_HEADER_SIZE = 8;
 export const PROFILE_COUNT = 4;
@@ -79,8 +80,9 @@ export const CONFIG_INFO_SIZE = 56;
 export const RAW_SIZE = 20;
 export const DIGITAL_INPUT_SIZE = 8;
 export const PROTOCOL_VERSION = 2;
-export const SCHEMA_VERSION = 8;
-export const PROFILE_VERSION = 5;
+export const SCHEMA_VERSION = 9;
+export const LEGACY_PROFILE_VERSION = 5;
+export const PROFILE_VERSION = 6;
 export const ANALOG_CALIBRATION_VERSION = 1;
 export const CURVE_POINT_COUNT = 9;
 export const CURVE_TYPE_PIECEWISE_LINEAR = 1;
@@ -88,12 +90,18 @@ export const ROUNDNESS_SECTOR_COUNT = 16;
 export const Q15_ONE = 32767;
 export const ROUNDNESS_Q15_ONE = 32768;
 export const ADC_MAX = 4095;
+export const STICK_RC_FLAG_SMOOTHING = 0x01;
+export const STICK_RC_FLAG_BOOST = 0x02;
+export const STICK_RC_ALPHA_MAX_Q15 = 32767;
+export const STICK_RC_GAIN_MAX_Q8_8 = 512;
 
 const RESPONSE_SIZE = 24;
 const STICK_RESPONSE_OFFSET = 8;
 const TRIGGER_RESPONSE_OFFSET = 56;
 const PROFILE_POLL_RATE_OFFSET = 252;
 const STICK_SHAPE_OFFSET = 256;
+const STICK_RC_OFFSET = 320;
+const STICK_RC_SIZE = 32;
 
 import {
   createDefaultResolver,
@@ -182,6 +190,37 @@ export function createLinearResponse() {
   };
 }
 
+export function createDefaultStickRc() {
+  return {
+    flags: 0,
+    smoothing_alpha_q15: 5825,
+    boost_fast_alpha_q15: 10532,
+    boost_slow_alpha_q15: 1995,
+    boost_gain_q8_8: 64,
+  };
+}
+
+function parseStickRc(view, offset) {
+  return {
+    flags: view.getUint8(offset),
+    smoothing_alpha_q15: view.getUint16(offset + 2, true),
+    boost_fast_alpha_q15: view.getUint16(offset + 4, true),
+    boost_slow_alpha_q15: view.getUint16(offset + 6, true),
+    boost_gain_q8_8: view.getUint16(offset + 8, true),
+  };
+}
+
+function writeStickRc(payload, view, offset, rc) {
+  const value = rc || createDefaultStickRc();
+  view.setUint8(offset, Number(value.flags) & 0x03);
+  view.setUint8(offset + 1, 0);
+  view.setUint16(offset + 2, Number(value.smoothing_alpha_q15), true);
+  view.setUint16(offset + 4, Number(value.boost_fast_alpha_q15), true);
+  view.setUint16(offset + 6, Number(value.boost_slow_alpha_q15), true);
+  view.setUint16(offset + 8, Number(value.boost_gain_q8_8), true);
+  payload.fill(0, offset + 10, offset + STICK_RC_SIZE);
+}
+
 export function parseProfile(payload, index = 0) {
   if (payload.byteLength !== PROFILE_SIZE) {
     throw new Error(`Unexpected profile payload size: ${payload.byteLength}`);
@@ -219,6 +258,10 @@ export function parseProfile(payload, index = 0) {
         ),
       ),
     })),
+    stick_rc: STICKS.map((name, stickIndex) => ({
+      name,
+      ...parseStickRc(view, STICK_RC_OFFSET + stickIndex * STICK_RC_SIZE),
+    })),
     raw: new Uint8Array(payload),
   };
 }
@@ -255,7 +298,32 @@ export function writeProfileDraftToPayload(payload, draft, resolverOptions = {})
         true,
       );
     });
+    writeStickRc(
+      payload,
+      view,
+      STICK_RC_OFFSET + stickIndex * STICK_RC_SIZE,
+      draft.stick_rc?.[stickIndex],
+    );
   });
+}
+
+export function migrateLegacyProfilePayload(payload) {
+  if (payload.byteLength !== LEGACY_PROFILE_SIZE) {
+    throw new Error(`Legacy Profile must be ${LEGACY_PROFILE_SIZE} bytes.`);
+  }
+  const migrated = new Uint8Array(PROFILE_SIZE);
+  migrated.set(payload);
+  const view = new DataView(migrated.buffer);
+  view.setUint16(0, PROFILE_VERSION, true);
+  STICKS.forEach((name, stickIndex) => {
+    writeStickRc(
+      migrated,
+      view,
+      STICK_RC_OFFSET + stickIndex * STICK_RC_SIZE,
+      createDefaultStickRc(),
+    );
+  });
+  return migrated;
 }
 
 export function createDefaultAnalogCalibration() {
