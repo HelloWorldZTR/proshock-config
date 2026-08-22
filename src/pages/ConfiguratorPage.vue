@@ -43,7 +43,7 @@
         <div class="button-row">
           <button type="button" @click="$emit('reset-curves', section)">Reset curves</button>
           <button type="button" @click="$emit('copy-curve', section)">Copy first to second</button>
-          <button v-if="section === 'sticks'" type="button" @click="$emit('calibrate')">Run Quick Calibration</button>
+          <button v-if="section === 'sticks'" type="button" @click="$emit('calibrate')">Run Analog Calibration</button>
         </div>
       </div>
       <InputViewer

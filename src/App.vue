@@ -50,12 +50,14 @@
     <QuickCalibrationPage
       v-else-if="page === 'calibration' && !iapMode"
       :step="wizardStep" :busy="busy" :error="wizardError" :neutral-result="neutralResult"
+      :calibration-mode="calibrationMode"
       :center-capture-active="centerCaptureActive" :center-capture-status="centerCaptureStatus"
       :left-range="rangeCaptureActive ? { sectorCounts: rangePreview.leftSectorCounts } : leftRange"
       :right-range="rangeCaptureActive ? { sectorCounts: rangePreview.rightSectorCounts } : rightRange"
       :trigger-capture-active="triggerCaptureActive" :trigger-window-count="triggerPressWindows.length"
       :calibration-valid="calibrationValidation.pass"
       :checks="calibrationChecks"
+      @mode="setCalibrationMode"
       @primary="wizardPrimary" @back="wizardBack" @cancel="cancelWizard"
     />
     <FirmwareUpgradePage
@@ -161,15 +163,18 @@ import {
   RANGE_SAMPLE_LIMIT,
   RAW_POLL_MS,
   analyzeCenterReturns,
+  analyzeQuickCenter,
   analyzeStickRange,
   analyzeTriggers,
   buildCalibrationDraft,
   createCenterReturnCapture,
+  createQuickCenterCapture,
   createTriggerCycleCapture,
   dedupeSnapshots,
   estimateStickCoverage,
   nextWizardStep,
   recordCenterReturnSample,
+  recordQuickCenterSample,
   recordTriggerCycleSample,
   validateCalibration,
   validateResponse,
@@ -198,14 +203,15 @@ const latestRaw = ref(null);
 const analogSnapshot = ref(null);
 const wizardStep = ref("neutral");
 const wizardError = ref("");
+const calibrationMode = ref("quick");
 const neutralResult = ref(null);
 const centerCaptureActive = ref(false);
 const centerCaptureStatus = ref({
   phase: "idle",
-  direction: CENTER_RETURN_DIRECTIONS[0],
+  direction: null,
   completed: 0,
   readySamples: 0,
-  insufficientSamples: false,
+  mode: "quick",
 });
 const leftRange = ref(null);
 const rightRange = ref(null);
@@ -299,7 +305,7 @@ const profileCards = computed(() => Array.from({ length: PROFILE_COUNT }, (_, in
 const navigation = [
   { id: "home", label: "Home" },
   { id: "configurator", label: "Configurator" },
-  { id: "calibration", label: "Quick Calibration" },
+  { id: "calibration", label: "Analog Calibration" },
   { id: "firmware", label: "Firmware Upgrade" },
   { id: "diagnostics", label: "Diagnostics" },
 ];
@@ -428,18 +434,41 @@ const calibrationChecks = computed(() => {
     });
   }
   if (neutralResult.value) {
+    checks.push({
+      pass: true,
+      label: "Center calibration mode",
+      detail: neutralResult.value.mode === "standard"
+        ? "Standard four-direction automatic return capture."
+        : "Quick single-window neutral capture.",
+    });
     neutralResult.value.axes.forEach((axis) => checks.push({
       pass: true,
       status: axis.warning ? "warning" : "pass",
       label: `${axis.name} neutral stability`,
-      detail: `Returns ${axis.returnCenters?.join(" / ") || axis.center}; max window noise ${axis.noiseSpan.toFixed(1)} counts (warn > 32); direction spread ${axis.returnCenterSpan?.toFixed(1) || "0.0"} counts (warn > 64).`,
+      detail: neutralResult.value.mode === "standard"
+        ? `Returns ${axis.returnCenters.join(" / ")}; max window noise ${axis.noiseSpan.toFixed(1)} counts (warn > 32); direction spread ${axis.returnCenterSpan.toFixed(1)} counts (warn > 64).`
+        : `Center ${axis.center}; window noise ${axis.noiseSpan.toFixed(1)} counts (warn > 32).`,
+    }));
+    neutralResult.value.warnings?.forEach((warning) => checks.push({
+      pass: true,
+      status: "warning",
+      label: "Automatic center fallback",
+      detail: `${warning.stage} used the best available center window after waiting; noise span ${warning.noiseSpan.toFixed(1)} counts.`,
     }));
   }
-  [leftRange.value, rightRange.value].filter(Boolean).forEach((range) => checks.push({
-    pass: range.sectorCounts.every((count) => count >= 8),
-    label: `${range.stickIndex ? "Right" : "Left"} stick outer coverage`,
-    detail: `${range.sectorCounts.filter((count) => count >= 8).length}/16 sectors have at least 8 rim samples.`,
-  }));
+  [leftRange.value, rightRange.value].filter(Boolean).forEach((range) => {
+    checks.push({
+      pass: range.sectorCounts.every((count) => count >= 8),
+      label: `${range.stickIndex ? "Right" : "Left"} stick outer coverage`,
+      detail: `${range.sectorCounts.filter((count) => count >= 8).length}/16 sectors have at least 8 rim samples.`,
+    });
+    range.warnings?.forEach((warning) => checks.push({
+      pass: true,
+      status: "warning",
+      label: `${warning.axis} center noise`,
+      detail: `${(warning.ratio * 100).toFixed(2)}% of its shorter calibrated span (${warning.noiseSpan.toFixed(1)} / ${warning.shorterSpan} counts; warn > 2%).`,
+    }));
+  });
   return checks;
 });
 const statusText = computed(() => JSON.stringify({
@@ -516,6 +545,14 @@ function routeHash(nextPage, section = null) {
 }
 
 function performGo(nextPage, section = null) {
+  if (
+    nextPage === "calibration"
+    && page.value !== "calibration"
+    && wizardStep.value === "neutral"
+    && !centerCaptureActive.value
+  ) {
+    calibrationMode.value = "quick";
+  }
   page.value = nextPage;
   if (nextPage === "configurator" && section) configuratorSection.value = section;
   if (nextPage === "diagnostics" && section) diagnosticsSection.value = section;
@@ -1005,8 +1042,7 @@ async function refreshAll() {
     calibrationBackup.value = clone(calibrationDraft.value);
     captureSavedBaselines(!configInfo.value.dirty);
     allProfiles.value = [];
-    wizardStep.value = "neutral";
-    wizardError.value = "";
+    resetCalibrationProgress();
     performGo(page.value, page.value === "configurator"
       ? configuratorSection.value
       : page.value === "diagnostics" ? diagnosticsSection.value : null);
@@ -1128,6 +1164,7 @@ function handleHeaderAction(action) {
 }
 
 function resetCalibrationProgress() {
+  calibrationMode.value = "quick";
   stopCenterTimer(true);
   stopRangeTimer();
   stopTriggerTimer();
@@ -1138,6 +1175,20 @@ function resetCalibrationProgress() {
   triggerPressWindows.value = [];
   wizardStep.value = "neutral";
   wizardError.value = "";
+}
+
+function setCalibrationMode(mode) {
+  if (
+    wizardStep.value !== "neutral"
+    || centerCaptureActive.value
+    || !["quick", "standard"].includes(mode)
+  ) {
+    return;
+  }
+  calibrationMode.value = mode;
+  neutralResult.value = null;
+  wizardError.value = "";
+  stopCenterTimer(true);
 }
 
 function restoreLocalBaselines() {
@@ -1350,11 +1401,12 @@ function syncCenterCaptureStatus() {
   const directionIndex = centerReturnCapture?.directionIndex || 0;
   centerCaptureStatus.value = {
     phase: centerReturnCapture?.phase || "idle",
-    direction: CENTER_RETURN_DIRECTIONS[directionIndex]
-      || CENTER_RETURN_DIRECTIONS.at(-1),
+    mode: centerReturnCapture?.mode || calibrationMode.value,
+    direction: centerReturnCapture?.mode === "standard"
+      ? CENTER_RETURN_DIRECTIONS[directionIndex] || CENTER_RETURN_DIRECTIONS.at(-1)
+      : null,
     completed: centerReturnCapture?.returnWindows.length || 0,
     readySamples: centerReturnCapture?.recentSamples.length || 0,
-    insufficientSamples: centerReturnCapture?.insufficientSamples || false,
   };
 }
 
@@ -1368,10 +1420,10 @@ function stopCenterTimer(resetStatus = false) {
   if (resetStatus) {
     centerCaptureStatus.value = {
       phase: "idle",
-      direction: CENTER_RETURN_DIRECTIONS[0],
+      mode: calibrationMode.value,
+      direction: calibrationMode.value === "standard" ? CENTER_RETURN_DIRECTIONS[0] : null,
       completed: 0,
       readySamples: 0,
-      insufficientSamples: false,
     };
   }
 }
@@ -1410,26 +1462,33 @@ function scheduleCenterPoll() {
     try {
       if (!client.busy && centerReturnCapture) {
         const raw = await getRaw();
-        const confirmed = consumeCalibrationConfirmEdge(
-          calibrationConfirmLatch,
-          raw.buttons,
-        );
-        const complete = recordCenterReturnSample(
-          centerReturnCapture,
-          raw,
-          confirmed,
-        );
+        consumeCalibrationConfirmEdge(calibrationConfirmLatch, raw.buttons);
+        const complete = centerReturnCapture.mode === "quick"
+          ? recordQuickCenterSample(centerReturnCapture, raw)
+          : recordCenterReturnSample(centerReturnCapture, raw);
         syncCenterCaptureStatus();
         if (complete) {
-          const returnWindows = centerReturnCapture.returnWindows;
-          neutralResult.value = analyzeCenterReturns(returnWindows);
+          const completedCapture = centerReturnCapture;
+          neutralResult.value = completedCapture.mode === "quick"
+            ? analyzeQuickCenter(
+                completedCapture.selectedWindow,
+                completedCapture.warnings,
+              )
+            : analyzeCenterReturns(
+                completedCapture.returnWindows,
+                completedCapture.warnings,
+              );
           stopCenterTimer();
           centerCaptureStatus.value = {
             phase: "complete",
-            direction: CENTER_RETURN_DIRECTIONS.at(-1),
-            completed: CENTER_RETURN_DIRECTIONS.length,
+            mode: completedCapture.mode,
+            direction: completedCapture.mode === "standard"
+              ? CENTER_RETURN_DIRECTIONS.at(-1)
+              : null,
+            completed: completedCapture.mode === "standard"
+              ? CENTER_RETURN_DIRECTIONS.length
+              : 1,
             readySamples: CENTER_RETURN_SAMPLE_COUNT,
-            insufficientSamples: false,
           };
           wizardStep.value = "sticks-range";
           wizardError.value = "";
@@ -1449,13 +1508,15 @@ async function startCenterCapture() {
   neutralResult.value = null;
   centerCaptureActive.value = true;
   centerCaptureStatus.value = {
-    phase: "waiting-confirmation",
-    direction: CENTER_RETURN_DIRECTIONS[0],
+    phase: calibrationMode.value === "quick" ? "settling" : "baseline",
+    mode: calibrationMode.value,
+    direction: calibrationMode.value === "standard" ? CENTER_RETURN_DIRECTIONS[0] : null,
     completed: 0,
     readySamples: 0,
-    insufficientSamples: false,
   };
-  centerReturnCapture = createCenterReturnCapture();
+  centerReturnCapture = calibrationMode.value === "quick"
+    ? createQuickCenterCapture()
+    : createCenterReturnCapture(configInfo.value?.axis_invert);
   syncCenterCaptureStatus();
   scheduleCenterPoll();
 }
@@ -1647,6 +1708,7 @@ function wizardBack() {
   if (wizardStep.value === "sticks-range") {
     startRangeCapture();
   } else if (wizardStep.value === "neutral") {
+    calibrationMode.value = "quick";
     neutralResult.value = null;
     stopCenterTimer(true);
   }

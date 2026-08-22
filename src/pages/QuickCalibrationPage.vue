@@ -2,13 +2,14 @@
   <div class="page calibration-page">
     <header class="page-heading">
       <p class="eyebrow">Device-level physical calibration</p>
-      <h1>Quick Calibration</h1>
-      <p class="calibration-promise">Quick Calibration only updates this device's physical stick and trigger ranges. It never modifies any Profile deadzone, response curve, button, or lighting setting.</p>
+      <h1>Analog Calibration</h1>
+      <p class="calibration-promise">Analog Calibration only updates this device's physical stick and trigger ranges. It never modifies any Profile deadzone, response curve, button, or lighting setting.</p>
     </header>
     <CalibrationWizard
       :step="step"
       :busy="busy"
       :error="error"
+      :calibration-mode="calibrationMode"
       :neutral-result="neutralResult"
       :center-capture-active="centerCaptureActive"
       :center-capture-status="centerCaptureStatus"
@@ -17,6 +18,7 @@
       :trigger-capture-active="triggerCaptureActive"
       :trigger-window-count="triggerWindowCount"
       :calibration-valid="calibrationValid"
+      @mode="$emit('mode', $event)"
       @primary="$emit('primary')"
       @back="$emit('back')"
       @cancel="$emit('cancel')"
@@ -49,9 +51,10 @@ function checkStatus(check) {
 
 defineProps({
   step: String, busy: Boolean, error: String, neutralResult: Object, leftRange: Object,
+  calibrationMode: String,
   centerCaptureActive: Boolean, centerCaptureStatus: Object,
   rightRange: Object, triggerCaptureActive: Boolean, triggerWindowCount: Number,
   calibrationValid: Boolean, checks: Array,
 });
-defineEmits(["primary", "back", "cancel"]);
+defineEmits(["primary", "back", "cancel", "mode"]);
 </script>

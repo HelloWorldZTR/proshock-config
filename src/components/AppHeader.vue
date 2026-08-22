@@ -172,7 +172,7 @@ const selectedColor = computed(() => (
 const navigation = [
   { id: "home", label: "Home", shortLabel: "Home", icon: Home },
   { id: "configurator", label: "Configurator", shortLabel: "Config", icon: SlidersHorizontal },
-  { id: "calibration", label: "Quick Calibration", shortLabel: "Calibrate", icon: Gauge },
+  { id: "calibration", label: "Analog Calibration", shortLabel: "Calibrate", icon: Gauge },
   { id: "firmware", label: "Firmware Upgrade", shortLabel: "Upgrade", icon: UploadCloud },
   { id: "diagnostics", label: "Diagnostics", shortLabel: "Diagnostics", icon: Activity },
 ];

@@ -14,6 +14,12 @@ export const CENTER_SAMPLE_COUNT = 64;
 export const CENTER_RETURN_SAMPLE_COUNT = 16;
 export const CENTER_NOISE_MAX_COUNTS = 32;
 export const CENTER_NOISE_MAX_RATIO = 0.02;
+export const CENTER_CAPTURE_TIMEOUT_SAMPLES = 100;
+export const CENTER_DEFLECTION_MIN_COUNTS = 512;
+export const CENTER_RETURN_MIN_COUNTS = 64;
+export const CENTER_RETURN_MAX_COUNTS = 256;
+export const CENTER_RETURN_PEAK_RATIO = 0.20;
+export const QUICK_CENTER_DISCARD_SAMPLES = 5;
 // Direction-dependent spring return is useful diagnostic data, not a reason
 // to reject otherwise valid numeric axis bounds.
 export const CENTER_RETURN_SPREAD_WARNING_COUNTS = 64;
@@ -35,10 +41,10 @@ export const WIZARD_STEPS = [
 ];
 
 export const CENTER_RETURN_DIRECTIONS = Object.freeze([
-  Object.freeze({ id: "top-left", label: "Top left" }),
-  Object.freeze({ id: "bottom-right", label: "Bottom right" }),
-  Object.freeze({ id: "top-right", label: "Top right" }),
-  Object.freeze({ id: "bottom-left", label: "Bottom left" }),
+  Object.freeze({ id: "top-left", label: "Top left", xSign: -1, ySign: -1 }),
+  Object.freeze({ id: "bottom-right", label: "Bottom right", xSign: 1, ySign: 1 }),
+  Object.freeze({ id: "top-right", label: "Top right", xSign: 1, ySign: -1 }),
+  Object.freeze({ id: "bottom-left", label: "Bottom left", xSign: -1, ySign: 1 }),
 ]);
 
 export const CURVE_PRESETS = {
@@ -84,6 +90,100 @@ export function dedupeSnapshots(snapshots) {
     seen.add(snapshot.sequence);
     return true;
   });
+}
+
+function centerWindowStats(samples) {
+  const selected = dedupeSnapshots(samples).slice(-CENTER_RETURN_SAMPLE_COUNT);
+  const axes = AXES.map((name, axisIndex) => {
+    const values = selected.map((sample) => sample.adc[axisIndex]);
+    const p05 = percentile(values, 0.05);
+    const p95 = percentile(values, 0.95);
+    return {
+      name,
+      center: Math.round(median(values)),
+      p05,
+      p95,
+      noiseSpan: p95 - p05,
+    };
+  });
+  return {
+    samples: selected,
+    axes,
+    score: Math.max(...axes.map((axis) => axis.noiseSpan)),
+  };
+}
+
+function pushCenterWindowSample(capture, sample) {
+  capture.recentSamples.push(sample);
+  if (capture.recentSamples.length > CENTER_RETURN_SAMPLE_COUNT) {
+    capture.recentSamples = capture.recentSamples.slice(-CENTER_RETURN_SAMPLE_COUNT);
+  }
+  capture.phaseSampleCount += 1;
+  if (capture.recentSamples.length < CENTER_RETURN_SAMPLE_COUNT) {
+    return null;
+  }
+  const stats = centerWindowStats(capture.recentSamples);
+  if (!capture.bestWindow || stats.score < capture.bestWindow.score) {
+    capture.bestWindow = stats;
+  }
+  return stats;
+}
+
+function resetCenterWindow(capture) {
+  capture.recentSamples = [];
+  capture.phaseSampleCount = 0;
+  capture.bestWindow = null;
+}
+
+function centerWindowReady(capture, stats) {
+  return stats && (
+    stats.score <= CENTER_NOISE_MAX_COUNTS
+    || capture.phaseSampleCount >= CENTER_CAPTURE_TIMEOUT_SAMPLES
+  );
+}
+
+function selectedCenterWindow(capture, stats) {
+  return stats?.score <= CENTER_NOISE_MAX_COUNTS
+    ? stats
+    : capture.bestWindow;
+}
+
+function trackFallbackCenterWindow(capture, sample) {
+  capture.returnSampleCount += 1;
+  capture.fallbackSamples.push(sample);
+  if (capture.fallbackSamples.length > CENTER_RETURN_SAMPLE_COUNT) {
+    capture.fallbackSamples = capture.fallbackSamples.slice(-CENTER_RETURN_SAMPLE_COUNT);
+  }
+  if (capture.fallbackSamples.length < CENTER_RETURN_SAMPLE_COUNT) {
+    return;
+  }
+  const stats = centerWindowStats(capture.fallbackSamples);
+  if (!capture.fallbackBestWindow || stats.score < capture.fallbackBestWindow.score) {
+    capture.fallbackBestWindow = stats;
+  }
+}
+
+function completeCenterReturn(capture, direction, selected, usedFallback) {
+  capture.returnWindows.push(selected.samples);
+  if (usedFallback || selected.score > CENTER_NOISE_MAX_COUNTS) {
+    capture.warnings.push({
+      type: "best-window",
+      stage: direction.id,
+      noiseSpan: selected.score,
+    });
+  }
+  capture.directionIndex += 1;
+  capture.phase = capture.directionIndex >= CENTER_RETURN_DIRECTIONS.length
+    ? "complete"
+    : "awaiting-deflection";
+  capture.peakDeltas = Array(4).fill(0);
+  capture.returnThresholds = Array(4).fill(CENTER_RETURN_MIN_COUNTS);
+  capture.returnCaptureStarted = false;
+  capture.returnSampleCount = 0;
+  capture.fallbackSamples = [];
+  capture.fallbackBestWindow = null;
+  resetCenterWindow(capture);
+  return capture.phase === "complete";
 }
 
 function fixedWindowEndpoint(values, highest) {
@@ -219,7 +319,7 @@ export function analyzeNeutral(snapshots) {
 /**
  * Combine four direction-dependent return windows into the final stick center.
  */
-export function analyzeCenterReturns(returnWindows) {
+export function analyzeCenterReturns(returnWindows, captureWarnings = []) {
   if (returnWindows.length !== CENTER_RETURN_DIRECTIONS.length) {
     throw new Error(`Center capture requires ${CENTER_RETURN_DIRECTIONS.length} return windows.`);
   }
@@ -284,62 +384,240 @@ export function analyzeCenterReturns(returnWindows) {
     };
   });
   return {
+    mode: "standard",
     axes,
     returns: returns.map(({ direction, axes: returnAxes }) => ({
       direction,
       centers: returnAxes.map((axis) => axis.center),
     })),
     sampleCount: returns.length * CENTER_RETURN_SAMPLE_COUNT,
+    warnings: [...captureWarnings],
   };
 }
 
 /**
- * Create the user-confirmed four-corner return-to-center capture tracker.
+ * Analyze the single neutral window used by quick calibration.
  */
-export function createCenterReturnCapture() {
+export function analyzeQuickCenter(samples, captureWarnings = []) {
+  const unique = dedupeSnapshots(samples);
+  if (unique.length < CENTER_RETURN_SAMPLE_COUNT) {
+    throw new Error(`Quick center requires ${CENTER_RETURN_SAMPLE_COUNT} unique samples.`);
+  }
+  const stats = centerWindowStats(unique);
+  const axes = stats.axes.map((axis) => {
+    const warnings = axis.noiseSpan > CENTER_NOISE_MAX_COUNTS
+      ? [`center window spans ${axis.noiseSpan.toFixed(1)} counts (warning above ${CENTER_NOISE_MAX_COUNTS})`]
+      : [];
+    return {
+      ...axis,
+      returnCenters: [axis.center],
+      combinedSpan: axis.noiseSpan,
+      returnCenterSpan: 0,
+      windowNoiseSpans: [axis.noiseSpan],
+      warning: warnings.length > 0,
+      warnings,
+      pass: true,
+    };
+  });
   return {
-    directionIndex: 0,
-    phase: "waiting-confirmation",
-    recentSamples: [],
-    returnWindows: [],
-    lastSequence: null,
-    insufficientSamples: false,
+    mode: "quick",
+    axes,
+    returns: [],
+    sampleCount: stats.samples.length,
+    warnings: [...captureWarnings],
   };
 }
 
 /**
- * Buffer one raw ADC snapshot and capture the preceding sample window only
- * when the user explicitly confirms it; return true after four returns.
+ * Create the quick neutral-window capture tracker.
  */
-export function recordCenterReturnSample(capture, sample, confirmed = false) {
+export function createQuickCenterCapture() {
+  return {
+    mode: "quick",
+    phase: "settling",
+    discardRemaining: QUICK_CENTER_DISCARD_SAMPLES,
+    recentSamples: [],
+    selectedWindow: null,
+    phaseSampleCount: 0,
+    bestWindow: null,
+    lastSequence: null,
+    warnings: [],
+  };
+}
+
+/**
+ * Capture one post-settle neutral window for quick calibration.
+ */
+export function recordQuickCenterSample(capture, sample) {
   if (!capture || !sample || capture.lastSequence === sample.sequence) {
     return false;
   }
   capture.lastSequence = sample.sequence;
+  if (capture.discardRemaining > 0) {
+    capture.discardRemaining -= 1;
+    return false;
+  }
+  capture.phase = "capturing-quick";
+  const stats = pushCenterWindowSample(capture, sample);
+  if (!stats || capture.recentSamples.length < CENTER_RETURN_SAMPLE_COUNT) {
+    return false;
+  }
+  capture.selectedWindow = stats.samples;
+  capture.phase = "complete";
+  return true;
+}
+
+/**
+ * Create the automatic four-corner return-to-center capture tracker.
+ */
+export function createCenterReturnCapture(axisInvert) {
+  return {
+    mode: "standard",
+    directionIndex: 0,
+    phase: "baseline",
+    recentSamples: [],
+    returnWindows: [],
+    baseline: null,
+    peakDeltas: Array(4).fill(0),
+    returnThresholds: Array(4).fill(CENTER_RETURN_MIN_COUNTS),
+    phaseSampleCount: 0,
+    bestWindow: null,
+    returnCaptureStarted: false,
+    returnSampleCount: 0,
+    fallbackSamples: [],
+    fallbackBestWindow: null,
+    lastSequence: null,
+    axisInvert,
+    warnings: [],
+  };
+}
+
+/**
+ * Advance automatic baseline, deflection, release, and return-window capture.
+ */
+export function recordCenterReturnSample(capture, sample) {
+  if (!capture || !sample || capture.lastSequence === sample.sequence) {
+    return false;
+  }
+  capture.lastSequence = sample.sequence;
+
+  if (capture.phase === "baseline") {
+    const stats = pushCenterWindowSample(capture, sample);
+    if (!centerWindowReady(capture, stats)) {
+      return false;
+    }
+    const selected = selectedCenterWindow(capture, stats);
+    capture.baseline = selected.axes.map((axis) => axis.center);
+    if (selected.score > CENTER_NOISE_MAX_COUNTS) {
+      capture.warnings.push({
+        type: "best-window",
+        stage: "baseline",
+        noiseSpan: selected.score,
+      });
+    }
+    capture.phase = "awaiting-deflection";
+    resetCenterWindow(capture);
+    return false;
+  }
+
   const direction = CENTER_RETURN_DIRECTIONS[capture.directionIndex];
   if (!direction) {
     return true;
   }
 
-  if (confirmed) {
-    if (capture.recentSamples.length < CENTER_RETURN_SAMPLE_COUNT) {
-      capture.insufficientSamples = true;
+  const logicalDeltas = capture.baseline.map((center, axisIndex) => (
+    (sample.adc[axisIndex] - center)
+    * calibrationAxisSign(axisIndex, capture.axisInvert)
+  ));
+  const expectedSigns = [
+    direction.xSign,
+    direction.ySign,
+    direction.xSign,
+    direction.ySign,
+  ];
+
+  if (capture.phase === "awaiting-deflection") {
+    const fullyDeflected = logicalDeltas.every((delta, axisIndex) => (
+      delta * expectedSigns[axisIndex] >= CENTER_DEFLECTION_MIN_COUNTS
+    ));
+    if (!fullyDeflected) {
       return false;
     }
-    capture.returnWindows.push(
-      capture.recentSamples.slice(-CENTER_RETURN_SAMPLE_COUNT),
-    );
-    capture.directionIndex += 1;
-    capture.recentSamples = [];
-    capture.insufficientSamples = false;
-    return capture.directionIndex >= CENTER_RETURN_DIRECTIONS.length;
+    capture.peakDeltas = logicalDeltas.map((delta) => Math.abs(delta));
+    capture.phase = "awaiting-return";
+    return false;
   }
 
-  capture.recentSamples.push(sample);
-  if (capture.recentSamples.length > CENTER_RETURN_SAMPLE_COUNT) {
-    capture.recentSamples = capture.recentSamples.slice(-CENTER_RETURN_SAMPLE_COUNT);
+  if (capture.phase === "awaiting-return") {
+    capture.peakDeltas = capture.peakDeltas.map((peak, axisIndex) => (
+      Math.max(peak, Math.abs(logicalDeltas[axisIndex]))
+    ));
+    capture.returnThresholds = capture.peakDeltas.map((peak) => Math.min(
+      CENTER_RETURN_MAX_COUNTS,
+      Math.max(CENTER_RETURN_MIN_COUNTS, Math.round(peak * CENTER_RETURN_PEAK_RATIO)),
+    ));
+    if (capture.returnCaptureStarted) {
+      trackFallbackCenterWindow(capture, sample);
+      if (
+        capture.returnSampleCount >= CENTER_CAPTURE_TIMEOUT_SAMPLES
+        && capture.fallbackBestWindow
+      ) {
+        return completeCenterReturn(
+          capture,
+          direction,
+          capture.fallbackBestWindow,
+          true,
+        );
+      }
+    }
+    const returned = logicalDeltas.every((delta, axisIndex) => (
+      Math.abs(delta) <= capture.returnThresholds[axisIndex]
+    ));
+    if (!returned) {
+      return false;
+    }
+    if (!capture.returnCaptureStarted) {
+      capture.returnCaptureStarted = true;
+      capture.returnSampleCount = 0;
+      capture.fallbackSamples = [];
+      capture.fallbackBestWindow = null;
+      trackFallbackCenterWindow(capture, sample);
+    }
+    capture.phase = "capturing-return";
+    resetCenterWindow(capture);
   }
-  capture.insufficientSamples = false;
+
+  if (capture.phase === "capturing-return") {
+    if (capture.fallbackSamples.at(-1)?.sequence !== sample.sequence) {
+      trackFallbackCenterWindow(capture, sample);
+    }
+    if (
+      capture.returnSampleCount >= CENTER_CAPTURE_TIMEOUT_SAMPLES
+      && capture.fallbackBestWindow
+    ) {
+      return completeCenterReturn(
+        capture,
+        direction,
+        capture.fallbackBestWindow,
+        true,
+      );
+    }
+    const insideReturnZone = logicalDeltas.every((delta, axisIndex) => (
+      Math.abs(delta) <= capture.returnThresholds[axisIndex]
+    ));
+    if (!insideReturnZone) {
+      capture.phase = "awaiting-return";
+      resetCenterWindow(capture);
+      return false;
+    }
+    const stats = pushCenterWindowSample(capture, sample);
+    if (!centerWindowReady(capture, stats)) {
+      return false;
+    }
+    const selected = selectedCenterWindow(capture, stats);
+    return completeCenterReturn(capture, direction, selected, false);
+  }
+
   return false;
 }
 
@@ -381,6 +659,7 @@ export function analyzeStickRange(
   axisInvert,
 ) {
   const unique = dedupeSnapshots(snapshots);
+  const warnings = [];
   if (unique.length > RANGE_SAMPLE_LIMIT) {
     throw new Error(`Range capture exceeded ${RANGE_SAMPLE_LIMIT} samples; retry the stick.`);
   }
@@ -400,9 +679,13 @@ export function analyzeStickRange(
     }
     const neutralNoise = neutralResult.axes[axisIndex].noiseSpan || 0;
     if (neutralNoise / shorterSpan > CENTER_NOISE_MAX_RATIO) {
-      throw new Error(
-        `${AXES[axisIndex]} neutral noise is ${(neutralNoise / shorterSpan * 100).toFixed(2)}% of its shorter calibrated span.`,
-      );
+      warnings.push({
+        type: "neutral-noise-ratio",
+        axis: AXES[axisIndex],
+        noiseSpan: neutralNoise,
+        shorterSpan,
+        ratio: neutralNoise / shorterSpan,
+      });
     }
     return {
       name: AXES[axisIndex],
@@ -455,6 +738,7 @@ export function analyzeStickRange(
     radius_q15,
     sectorCounts: sectors.map((samples) => samples.length),
     sampleCount: unique.length,
+    warnings,
   };
 }
 

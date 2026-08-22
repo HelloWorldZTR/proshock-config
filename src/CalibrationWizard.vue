@@ -10,6 +10,27 @@
       <p>{{ instruction }}</p>
     </header>
 
+    <div v-if="step === 'neutral'" class="calibration-mode-switch" aria-label="Center calibration mode">
+      <button
+        type="button"
+        :class="{ active: calibrationMode === 'quick' }"
+        :disabled="centerCaptureActive"
+        @click="$emit('mode', 'quick')"
+      >
+        <strong>Quick · Default</strong>
+        <span>Keep both sticks centered for one automatic sample window.</span>
+      </button>
+      <button
+        type="button"
+        :class="{ active: calibrationMode === 'standard' }"
+        :disabled="centerCaptureActive"
+        @click="$emit('mode', 'standard')"
+      >
+        <strong>Standard</strong>
+        <span>Push and release four diagonals; each return is recorded automatically.</span>
+      </button>
+    </div>
+
     <p v-if="error" class="inline-error">{{ error }}</p>
     <p v-if="step === 'triggers-pressed'">
       Detected press/release cycles: {{ triggerWindowCount }}/5
@@ -21,9 +42,13 @@
     >
       <div class="center-return-status">
         <strong>{{ centerStatusLabel }}</strong>
-        <span>{{ centerCaptureStatus?.completed || 0 }}/4 returns recorded · {{ centerCaptureStatus?.readySamples || 0 }}/16 ready</span>
+        <span>{{ centerProgressLabel }}</span>
       </div>
-      <ol class="center-return-directions" aria-label="Center return directions">
+      <ol
+        v-if="calibrationMode === 'standard'"
+        class="center-return-directions"
+        aria-label="Center return directions"
+      >
         <li
           v-for="(direction, index) in centerDirections"
           :key="direction.id"
@@ -34,8 +59,10 @@
           <small>{{ centerDirectionState(index) }}</small>
         </li>
       </ol>
-      <p v-if="centerCaptureStatus?.insufficientSamples" class="center-confirm-note warning">
-        Keep the sticks released briefly, then confirm again.
+      <p v-if="centerCaptureActive" class="center-confirm-note">
+        {{ calibrationMode === "quick"
+          ? "Do not touch either stick until the center window completes."
+          : "Wait until the current direction is marked recorded before starting the next one." }}
       </p>
     </div>
     <div v-if="step === 'neutral' && neutralResult" class="calibration-summary">
@@ -88,6 +115,7 @@ const props = defineProps({
   step: { type: String, required: true },
   busy: { type: Boolean, default: false },
   error: { type: String, default: "" },
+  calibrationMode: { type: String, default: "quick" },
   neutralResult: { type: Object, default: null },
   centerCaptureActive: { type: Boolean, default: false },
   centerCaptureStatus: { type: Object, default: null },
@@ -98,7 +126,7 @@ const props = defineProps({
   calibrationValid: { type: Boolean, default: false },
 });
 
-defineEmits(["back", "cancel", "primary"]);
+defineEmits(["back", "cancel", "mode", "primary"]);
 
 const visibleSteps = WIZARD_STEPS.filter((step) => step !== "backup" && step !== "complete");
 const visibleStepCount = visibleSteps.length;
@@ -119,23 +147,39 @@ function centerDirectionState(index) {
 
 const centerStatusLabel = computed(() => {
   if (!props.centerCaptureActive) {
-    return "Ready to measure four spring returns";
+    return props.calibrationMode === "quick"
+      ? "Ready for a quick neutral sample"
+      : "Ready to measure four spring returns";
   }
   const direction = props.centerCaptureStatus?.direction?.label || "Top left";
   return {
-    "waiting-confirmation": `Push both sticks fully ${direction}, release them, then confirm when centered`,
+    settling: "Settling before the quick center window",
+    "capturing-quick": "Capturing both sticks at rest",
+    baseline: "Hold both sticks centered while the baseline is measured",
+    "awaiting-deflection": `Push both sticks fully ${direction}`,
+    "awaiting-return": `Release both sticks from ${direction}`,
+    "capturing-return": `Hold centered while the ${direction} return is recorded`,
     complete: "Four center returns recorded",
   }[props.centerCaptureStatus?.phase]
-    || `Push both sticks fully ${direction}, release them, then confirm when centered`;
+    || "Listening for stick movement";
+});
+
+const centerProgressLabel = computed(() => {
+  const ready = props.centerCaptureStatus?.readySamples || 0;
+  if (props.calibrationMode === "quick") {
+    return `${ready}/16 center samples`;
+  }
+  return `${props.centerCaptureStatus?.completed || 0}/4 returns recorded · ${ready}/16 center samples`;
 });
 
 const showControllerConfirmIcons = computed(() => (
   props.step !== "complete"
+  && props.step !== "neutral"
   && !(props.step === "triggers-pressed" && props.triggerCaptureActive)
 ));
 
 const copy = {
-  neutral: ["Four-corner center return", "For each shown direction, push both sticks fully, release them, wait for the center you want, then confirm from the controller."],
+  neutral: ["Stick center calibration", "Choose quick neutral sampling or automatic four-direction return measurement."],
   "sticks-range": ["Both stick ranges and roundness", "Sampling has started. Rotate both sticks around their outer gates until both coverage grids are complete, then continue once."],
   "triggers-released": ["Trigger released points", "Leave L2 and R2 completely released while a stable window is sampled."],
   "triggers-pressed": ["Trigger press/release cycles", "Detection has started. Press L2 and R2 fully, then release both; repeat five times. No extra clicks are needed."],
@@ -150,7 +194,9 @@ const instruction = computed(() => (
     : copy[props.step]?.[1] || "The analog calibration workflow is complete."
 ));
 const primaryLabel = computed(() => ({
-  neutral: props.centerCaptureActive ? "Listening…" : "Start center capture",
+  neutral: props.centerCaptureActive
+    ? "Listening…"
+    : props.calibrationMode === "quick" ? "Start quick calibration" : "Start standard calibration",
   "sticks-range": "Finish both sticks",
   "triggers-released": "Capture released",
   "triggers-pressed": props.triggerCaptureActive ? "Listening…" : "Retry detection",

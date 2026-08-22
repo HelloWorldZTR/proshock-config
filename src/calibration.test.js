@@ -17,14 +17,17 @@ import {
 import {
   analyzeCenterReturns,
   analyzeNeutral,
+  analyzeQuickCenter,
   analyzeStickRange,
   analyzeTriggers,
   curvePresetToQ15,
   createCenterReturnCapture,
+  createQuickCenterCapture,
   createTriggerCycleCapture,
   nextWizardStep,
   normalizeAxis,
   recordCenterReturnSample,
+  recordQuickCenterSample,
   recordTriggerCycleSample,
   validateCalibration,
   validateResponse,
@@ -69,21 +72,71 @@ test("neutral uses 64 unique snapshots and rejects duplicates", () => {
   assert.ok(result.axes.every((axis) => axis.pass));
 });
 
-test("center capture advances only when the user confirms each return", () => {
+test("quick center discards startup samples and records 16 unique neutral samples", () => {
+  let sequence = 0;
+  const center = [2048, 2048, 2052, 2044, 200, 200];
+  const capture = createQuickCenterCapture();
+  for (let index = 0; index < 5; index += 1) {
+    assert.equal(recordQuickCenterSample(
+      capture,
+      snapshot(sequence++, [500, 500, 500, 500, 200, 200]),
+    ), false);
+  }
+  for (let index = 0; index < 16; index += 1) {
+    const sample = snapshot(sequence++, center.map((value, axisIndex) => (
+      axisIndex < 4 ? value + index % 3 - 1 : value
+    )));
+    const complete = recordQuickCenterSample(capture, sample);
+    assert.equal(complete, index === 15);
+    if (index === 0) {
+      assert.equal(recordQuickCenterSample(capture, sample), false);
+    }
+  }
+  const result = analyzeQuickCenter(capture.selectedWindow);
+  assert.equal(result.mode, "quick");
+  assert.equal(result.sampleCount, 16);
+  assert.deepEqual(result.axes.map((axis) => axis.center), center.slice(0, 4));
+});
+
+test("quick center reports high noise as a warning without rejecting the result", () => {
+  const samples = Array.from({ length: 16 }, (_, index) => snapshot(index, [
+    index % 2 ? 1800 : 2200,
+    2048,
+    2048,
+    2048,
+    200,
+    200,
+  ]));
+  const result = analyzeQuickCenter(samples);
+  assert.equal(result.axes[0].warning, true);
+  assert.equal(result.axes[0].pass, true);
+});
+
+test("standard center automatically detects four diagonal deflections and returns", () => {
   let sequence = 0;
   const center = [2048, 2048, 2052, 2044, 200, 200];
   const capture = createCenterReturnCapture();
+  for (let index = 0; index < 16; index += 1) {
+    recordCenterReturnSample(capture, snapshot(sequence++, center));
+  }
+  assert.equal(capture.phase, "awaiting-deflection");
   const directions = [
-    [500, 500, 500, 500, 200, 200],
-    [3600, 3600, 3600, 3600, 200, 200],
-    [3600, 500, 3600, 500, 200, 200],
-    [500, 3600, 500, 3600, 200, 200],
+    [-700, -700],
+    [700, 700],
+    [700, -700],
+    [-700, 700],
   ];
-  directions.forEach((deflected, directionIndex) => {
-    assert.equal(recordCenterReturnSample(
-      capture,
-      snapshot(sequence++, deflected),
-    ), false);
+  directions.forEach(([x, y], directionIndex) => {
+    const deflected = [
+      center[0] + x,
+      center[1] + y,
+      center[2] + x,
+      center[3] + y,
+      200,
+      200,
+    ];
+    assert.equal(recordCenterReturnSample(capture, snapshot(sequence++, deflected)), false);
+    assert.equal(capture.phase, "awaiting-return");
     for (let sampleIndex = 0; sampleIndex < 16; sampleIndex += 1) {
       const returned = center.map((value, axisIndex) => (
         axisIndex < 4 ? value + (directionIndex + sampleIndex) % 3 - 1 : value
@@ -92,22 +145,96 @@ test("center capture advances only when the user confirms each return", () => {
         capture,
         snapshot(sequence++, returned),
       );
-      assert.equal(complete, false);
+      assert.equal(complete, directionIndex === 3 && sampleIndex === 15);
     }
-    assert.equal(capture.directionIndex, directionIndex);
-    const complete = recordCenterReturnSample(
-      capture,
-      snapshot(sequence++, [...center]),
-      true,
-    );
-    assert.equal(complete, directionIndex === 3);
     assert.equal(capture.directionIndex, directionIndex + 1);
   });
-  const result = analyzeCenterReturns(capture.returnWindows);
+  const result = analyzeCenterReturns(capture.returnWindows, capture.warnings);
+  assert.equal(result.mode, "standard");
   assert.equal(result.returns.length, 4);
   assert.equal(result.sampleCount, 64);
   assert.deepEqual(result.axes.map((axis) => axis.center), center.slice(0, 4));
   assert.ok(result.axes.every((axis) => axis.pass));
+});
+
+test("standard center ignores the wrong direction and resets a return window after rebound", () => {
+  let sequence = 0;
+  const center = [2048, 2048, 2048, 2048, 200, 200];
+  const capture = createCenterReturnCapture();
+  for (let index = 0; index < 16; index += 1) {
+    recordCenterReturnSample(capture, snapshot(sequence++, center));
+  }
+  recordCenterReturnSample(capture, snapshot(sequence++, [
+    2748, 2748, 2748, 2748, 200, 200,
+  ]));
+  assert.equal(capture.phase, "awaiting-deflection");
+  recordCenterReturnSample(capture, snapshot(sequence++, [
+    1348, 1348, 1348, 1348, 200, 200,
+  ]));
+  assert.equal(capture.phase, "awaiting-return");
+  recordCenterReturnSample(capture, snapshot(sequence++, center));
+  assert.equal(capture.phase, "capturing-return");
+  recordCenterReturnSample(capture, snapshot(sequence++, [
+    1700, 1700, 1700, 1700, 200, 200,
+  ]));
+  assert.equal(capture.phase, "awaiting-return");
+  assert.equal(capture.recentSamples.length, 0);
+});
+
+test("standard center uses firmware axis flips for logical direction detection", () => {
+  let sequence = 0;
+  const center = [2048, 2048, 2048, 2048, 200, 200];
+  const capture = createCenterReturnCapture([true, true, true, true]);
+  for (let index = 0; index < 16; index += 1) {
+    recordCenterReturnSample(capture, snapshot(sequence++, center));
+  }
+  recordCenterReturnSample(capture, snapshot(sequence++, [
+    2748, 2748, 2748, 2748, 200, 200,
+  ]));
+  assert.equal(capture.phase, "awaiting-return");
+});
+
+test("standard center baseline timeout keeps the best window and warns", () => {
+  const capture = createCenterReturnCapture();
+  for (let index = 0; index < 100; index += 1) {
+    recordCenterReturnSample(capture, snapshot(index, [
+      index % 2 ? 1800 : 2200,
+      index % 2 ? 1800 : 2200,
+      index % 2 ? 1800 : 2200,
+      index % 2 ? 1800 : 2200,
+      200,
+      200,
+    ]));
+  }
+  assert.equal(capture.phase, "awaiting-deflection");
+  assert.equal(capture.warnings[0].stage, "baseline");
+});
+
+test("standard center return timeout crosses rebound resets and continues with a warning", () => {
+  let sequence = 0;
+  const center = [2048, 2048, 2048, 2048, 200, 200];
+  const capture = createCenterReturnCapture();
+  for (let index = 0; index < 16; index += 1) {
+    recordCenterReturnSample(capture, snapshot(sequence++, center));
+  }
+  recordCenterReturnSample(capture, snapshot(sequence++, [
+    1348, 1348, 1348, 1348, 200, 200,
+  ]));
+  recordCenterReturnSample(capture, snapshot(sequence++, center));
+  for (let index = 1; index < 100; index += 1) {
+    const offset = index % 2 ? 180 : 0;
+    recordCenterReturnSample(capture, snapshot(sequence++, [
+      center[0] + offset,
+      center[1] + offset,
+      center[2] + offset,
+      center[3] + offset,
+      200,
+      200,
+    ]));
+  }
+  assert.equal(capture.directionIndex, 1);
+  assert.equal(capture.phase, "awaiting-deflection");
+  assert.equal(capture.warnings[0].stage, "top-left");
 });
 
 test("stable direction-dependent centers warn without blocking calibration", () => {
@@ -125,40 +252,6 @@ test("stable direction-dependent centers warn without blocking calibration", () 
   assert.ok(result.axes.every((axis) => axis.warning));
   assert.ok(result.axes.every((axis) => axis.returnCenterSpan === 120));
   assert.deepEqual(result.axes.map((axis) => axis.center), [2060, 2060, 2060, 2060]);
-});
-
-test("manual center confirmation requires a complete pre-press sample window", () => {
-  let sequence = 0;
-  const center = [2048, 2048, 2048, 2048, 200, 200];
-  const capture = createCenterReturnCapture();
-  for (let index = 0; index < 8; index += 1) {
-    recordCenterReturnSample(
-      capture,
-      snapshot(sequence++, [...center]),
-    );
-  }
-  assert.equal(recordCenterReturnSample(
-    capture,
-    snapshot(sequence++, [...center]),
-    true,
-  ), false);
-  assert.equal(capture.directionIndex, 0);
-  assert.equal(capture.insufficientSamples, true);
-
-  for (let index = 0; index < 16; index += 1) {
-    recordCenterReturnSample(
-      capture,
-      snapshot(sequence++, [...center]),
-    );
-  }
-  assert.equal(capture.directionIndex, 0);
-  assert.equal(recordCenterReturnSample(
-    capture,
-    snapshot(sequence++, [...center]),
-    true,
-  ), false);
-  assert.equal(capture.directionIndex, 1);
-  assert.equal(capture.insufficientSamples, false);
 });
 
 test("calibration polarity supports legacy and firmware-provided flips", () => {
@@ -272,7 +365,7 @@ test("stick range rejects a small circle normalized against its own envelope", (
   );
 });
 
-test("stick range rejects excessive normalized neutral noise", () => {
+test("stick range reports excessive normalized neutral noise as a warning", () => {
   const neutral = {
     axes: Array.from({ length: 4 }, (_, index) => ({
       name: ["LX", "LY", "RX", "RY"][index],
@@ -298,10 +391,38 @@ test("stick range rejects excessive normalized neutral noise", () => {
     }
   }
 
-  assert.throws(
-    () => analyzeStickRange(samples, 0, neutral),
-    /neutral noise is 4\.00%/,
-  );
+  const result = analyzeStickRange(samples, 0, neutral);
+  assert.equal(result.warnings.length, 2);
+  assert.ok(result.warnings.every((warning) => warning.ratio === 0.04));
+});
+
+test("stick range keeps a 92.06 percent center-noise result non-blocking", () => {
+  const neutral = {
+    axes: Array.from({ length: 4 }, (_, index) => ({
+      name: ["LX", "LY", "RX", "RY"][index],
+      center: 2048,
+      noiseSpan: index === 0 ? 736.48 : 2,
+      pass: true,
+    })),
+  };
+  const samples = [];
+  let sequence = 0;
+  for (let sector = 0; sector < 16; sector += 1) {
+    const angle = sector * Math.PI * 2 / 16;
+    for (let repeat = 0; repeat < 10; repeat += 1) {
+      samples.push(snapshot(sequence++, [
+        Math.round(2048 + Math.cos(angle) * 800),
+        Math.round(2048 + Math.sin(angle) * 800),
+        2048,
+        2048,
+        200,
+        200,
+      ]));
+    }
+  }
+  const result = analyzeStickRange(samples, 0, neutral);
+  assert.equal(result.warnings.length, 1);
+  assert.equal((result.warnings[0].ratio * 100).toFixed(2), "92.06");
 });
 
 test("stick boundary uses the outer envelope instead of accumulated pass count", () => {

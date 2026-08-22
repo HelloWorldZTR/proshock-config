@@ -23,6 +23,15 @@ test("source-message placeholders preserve runtime values", () => {
   assert.equal(translate("Untranslated firmware status", "zh-CN"), "Untranslated firmware status");
 });
 
+test("analog calibration modes and progress are available in Chinese", () => {
+  assert.equal(translate("Analog Calibration", "zh-CN"), "模拟量校准");
+  assert.equal(translate("Quick · Default", "zh-CN"), "快速 · 默认");
+  assert.equal(
+    translate("2/4 returns recorded · 7/16 center samples", "zh-CN"),
+    "已记录 2/4 次回中 · 中心样本 7/16",
+  );
+});
+
 test("physical controller labels match the artwork in every locale", () => {
   [
     "Square", "Cross", "Circle", "Triangle", "Create", "Share", "Options",
