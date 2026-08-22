@@ -184,14 +184,51 @@ label { display: grid; gap: 8px; color: var(--secondary); font-size: 13px; }
 .roundness-editor-heading > div { max-width: 760px; }
 .roundness-editor-heading h2 { margin-bottom: 7px; }
 .roundness-editor-heading p:last-child { margin: 0; }
-.roundness-sector-map { margin: 0; padding: 11px 13px; border-left: 2px solid var(--accent); background: rgba(85,214,255,.045); color: var(--secondary); font: 10px ui-monospace, monospace; }
+.roundness-test-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.roundness-test-actions button.active { border-color: var(--danger); color: var(--danger); }
+.roundness-legend { display: flex; flex-wrap: wrap; gap: 9px 18px; padding: 10px 12px; border-left: 2px solid var(--accent); background: rgba(85,214,255,.035); color: var(--muted); font: 9px ui-monospace, monospace; }
+.roundness-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.roundness-legend span::before { width: 16px; height: 3px; content: ""; background: currentColor; }
+.roundness-legend .target { color: var(--accent); }
+.roundness-legend .standard, .roundness-legend .good { color: var(--success); }
+.roundness-legend .bad { color: var(--danger); }
 .roundness-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.roundness-editor-stick { min-width: 0; padding: 16px; border: 1px solid var(--border); background: rgba(255,255,255,.014); }
+.roundness-editor-stick { min-width: 0; display: grid; gap: 13px; padding: 16px; border: 1px solid var(--border); background: rgba(255,255,255,.014); }
 .roundness-editor-stick > header { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.roundness-editor-stick > header > div { display: flex; align-items: center; gap: 8px; }
 .roundness-editor-stick > header strong { font-size: 13px; }
-.roundness-editor-stick > header span { color: var(--accent); font: 9px ui-monospace, monospace; }
-.roundness-editor-stick > header button { min-height: 28px; padding-inline: 8px; font-size: 9px; }
-.roundness-raw-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; padding-top: 14px; }
+.roundness-stick-index, .roundness-preset-name { color: var(--accent); font: 9px ui-monospace, monospace; }
+.roundness-result-badge { padding: 5px 7px; border: 1px solid var(--border); color: var(--muted); font: 8px ui-monospace, monospace; text-transform: uppercase; letter-spacing: .04em; }
+.roundness-result-badge.good { border-color: color-mix(in srgb, var(--success) 55%, transparent); color: var(--success); background: color-mix(in srgb, var(--success) 8%, transparent); }
+.roundness-result-badge.bad { border-color: color-mix(in srgb, var(--danger) 55%, transparent); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.roundness-preset-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.roundness-preset-row button { min-width: 0; min-height: 30px; padding: 4px 6px; font-size: 9px; }
+.roundness-preset-row button.active { border-color: var(--accent); color: var(--accent); background: rgba(85,214,255,.07); }
+.roundness-visual-layout { min-width: 0; display: grid; grid-template-columns: minmax(230px, 1fr) 126px; align-items: center; gap: 12px; }
+.roundness-drag-chart { display: block; width: 100%; aspect-ratio: 1; overflow: visible; touch-action: none; cursor: crosshair; border: 1px solid rgba(255,255,255,.055); background: radial-gradient(circle, rgba(85,214,255,.035), rgba(4,8,12,.35) 65%, rgba(4,8,12,.7)); }
+.roundness-drag-chart * { vector-effect: non-scaling-stroke; }
+.roundness-tolerance-guide { fill: none; stroke: color-mix(in srgb, var(--success) 26%, transparent); stroke-width: 1; stroke-dasharray: 3 5; }
+.roundness-standard-circle { fill: none; stroke: color-mix(in srgb, var(--success) 74%, transparent); stroke-width: 1.5; }
+.roundness-sector-spoke { stroke: rgba(255,255,255,.055); stroke-width: 1; }
+.roundness-target-shape { fill: rgba(85,214,255,.08); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.roundness-measured-fill { stroke: none; }
+.roundness-measured-fill.good { fill: color-mix(in srgb, var(--success) 10%, transparent); }
+.roundness-measured-fill.bad { fill: color-mix(in srgb, var(--danger) 9%, transparent); }
+.roundness-measured-segment { stroke-width: 3; stroke-linecap: round; }
+.roundness-measured-segment.good, .roundness-measured-point.good { stroke: var(--success); fill: var(--success); }
+.roundness-measured-segment.bad, .roundness-measured-point.bad { stroke: var(--danger); fill: var(--danger); }
+.roundness-drag-handle { fill: #0b1118; stroke: var(--accent); stroke-width: 2; cursor: grab; transition: r .12s ease, fill .12s ease; }
+.roundness-drag-handle:hover, .roundness-drag-handle:focus { r: 8px; fill: var(--accent); outline: none; }
+.roundness-live-point { fill: #fff; stroke: var(--accent); stroke-width: 7; pointer-events: none; }
+.roundness-test-summary { display: grid; gap: 0; margin: 0; border-top: 1px solid var(--border); }
+.roundness-test-summary > div { display: grid; gap: 3px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.roundness-test-summary dt { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .05em; }
+.roundness-test-summary dd { margin: 0; color: var(--secondary); font: 11px ui-monospace, monospace; }
+.roundness-test-note { min-height: 46px; margin: 0; padding: 10px 12px; border-left: 2px solid var(--accent); background: rgba(85,214,255,.035); color: var(--muted); font-size: 9px; line-height: 1.55; }
+.roundness-precision-values { border-top: 1px solid var(--border); }
+.roundness-precision-values summary { padding-top: 12px; color: var(--secondary); font-size: 10px; cursor: pointer; }
+.roundness-precision-values > p { margin: 9px 0 0; color: var(--muted); font: 9px ui-monospace, monospace; }
+.roundness-raw-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; padding-top: 12px; }
 .roundness-raw-grid label { min-width: 0; display: grid; gap: 6px; padding: 8px; border: 1px solid var(--border); background: rgba(255,255,255,.012); }
 .roundness-raw-grid label > span { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; }
 .roundness-raw-grid b { color: var(--accent); font: 10px ui-monospace, monospace; }
@@ -880,6 +917,10 @@ input[type=range] { width: 100%; padding: 0; accent-color: var(--accent); }
   .roundness-stick-grid, .response-trigger-grid { grid-template-columns: 1fr; }
   .roundness-toolbar { align-items: flex-start; flex-direction: column; }
   .roundness-editor-heading { align-items: flex-start; flex-direction: column; }
+  .roundness-test-actions { justify-content: flex-start; }
+  .roundness-visual-layout { grid-template-columns: 1fr; }
+  .roundness-test-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .roundness-test-summary > div:nth-child(odd) { padding-right: 12px; }
   .roundness-raw-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .firmware-recovery-note { grid-template-columns: 1fr; justify-items: center; text-align: center; }
   .firmware-entry-stage { min-height: 390px; padding-inline: 0; }

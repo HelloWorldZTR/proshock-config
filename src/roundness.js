@@ -1,5 +1,6 @@
 export const ROUNDNESS_TEST_SECTOR_COUNT = 16;
-export const ROUNDNESS_TEST_MIN_RADIUS = 0.7;
+export const ROUNDNESS_TEST_MIN_RADIUS = 0.5;
+export const ROUNDNESS_TEST_TOLERANCE = 0.05;
 
 /**
  * Create an empty fixed-size roundness capture.
@@ -81,6 +82,40 @@ export function analyzeRoundnessCapture(capture) {
     errorPercent,
     minRadius: Math.min(...coveredRadii),
     maxRadius: Math.max(...coveredRadii),
+  };
+}
+
+/**
+ * Compare a measured trace with the selected per-sector target shape.
+ *
+ * A covered sector is green when its radial error is within five percent of
+ * the target and red when it falls outside that tolerance.
+ */
+export function analyzeRoundnessAgainstTarget(
+  capture,
+  targetRadii,
+  tolerance = ROUNDNESS_TEST_TOLERANCE,
+) {
+  const sectorStatus = capture.radii.map((radius, sector) => {
+    if (!(radius > 0)) return "missing";
+    const target = Number(targetRadii?.[sector]);
+    if (!(target > 0)) return "bad";
+    return Math.abs(radius - target) / target <= tolerance ? "good" : "bad";
+  });
+  const covered = sectorStatus.filter((status) => status !== "missing");
+  const errors = capture.radii.flatMap((radius, sector) => {
+    const target = Number(targetRadii?.[sector]);
+    return radius > 0 && target > 0 ? [Math.abs(radius - target) / target] : [];
+  });
+  return {
+    coverage: covered.length,
+    complete: covered.length === ROUNDNESS_TEST_SECTOR_COUNT,
+    pass: covered.length === ROUNDNESS_TEST_SECTOR_COUNT
+      && sectorStatus.every((status) => status === "good"),
+    errorPercent: errors.length
+      ? errors.reduce((total, error) => total + error, 0) / errors.length * 100
+      : null,
+    sectorStatus,
   };
 }
 

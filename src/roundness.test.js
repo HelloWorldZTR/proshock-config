@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  analyzeRoundnessAgainstTarget,
   analyzeRoundnessCapture,
   createRoundnessCapture,
   recordRoundnessSample,
@@ -46,4 +47,22 @@ test("roundness error is mean radial deviation from full scale", () => {
   assert.ok(Math.abs(result.errorPercent - 10) < 0.000001);
   assert.ok(Math.abs(result.minRadius - 0.9) < 0.000001);
   assert.ok(Math.abs(result.maxRadius - 1.1) < 0.000001);
+});
+
+test("target comparison marks measured sectors green or red", () => {
+  let capture = createRoundnessCapture();
+  for (let index = 0; index < 16; index += 1) {
+    const angle = index * Math.PI * 2 / 16;
+    const radius = index === 3 ? 0.9 : 1.02;
+    capture = recordRoundnessSample(
+      capture,
+      Math.cos(angle) * radius,
+      Math.sin(angle) * radius,
+    );
+  }
+  const result = analyzeRoundnessAgainstTarget(capture, Array(16).fill(1));
+  assert.equal(result.complete, true);
+  assert.equal(result.pass, false);
+  assert.equal(result.sectorStatus[0], "good");
+  assert.equal(result.sectorStatus[3], "bad");
 });

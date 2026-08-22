@@ -116,6 +116,24 @@ export function deriveLeaveGuardKind({
 }
 
 /**
+ * Keep partial calibration work guarded without treating completed capture
+ * counters as unsaved state after firmware save succeeds.
+ */
+export function deriveCalibrationGuardPending({
+  wizardStep,
+  workflowPending,
+  centerCaptureActive,
+  completedCenterReturns,
+  calibrationChanged,
+}) {
+  if (calibrationChanged) return true;
+  if (wizardStep === "complete") return false;
+  return workflowPending
+    || centerCaptureActive
+    || completedCenterReturns > 0;
+}
+
+/**
  * Protect only actions that can replace the current Profile draft or reload it.
  */
 export function shouldGuardNavigation({

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   HEADER_ACTION,
   LEAVE_GUARD_KIND,
+  deriveCalibrationGuardPending,
   deriveHeaderState,
   deriveLeaveGuardKind,
   shouldGuardNavigation,
@@ -72,6 +73,30 @@ test("leave guard prioritizes drafts, calibration, then applied RAM", () => {
     calibrationPending: false,
     ramDirty: false,
   }), LEAVE_GUARD_KIND.NONE);
+});
+
+test("completed calibration capture no longer leaves a stale guard", () => {
+  assert.equal(deriveCalibrationGuardPending({
+    wizardStep: "neutral",
+    workflowPending: false,
+    centerCaptureActive: false,
+    completedCenterReturns: 2,
+    calibrationChanged: false,
+  }), true);
+  assert.equal(deriveCalibrationGuardPending({
+    wizardStep: "complete",
+    workflowPending: false,
+    centerCaptureActive: false,
+    completedCenterReturns: 4,
+    calibrationChanged: false,
+  }), false);
+  assert.equal(deriveCalibrationGuardPending({
+    wizardStep: "complete",
+    workflowPending: false,
+    centerCaptureActive: false,
+    completedCenterReturns: 4,
+    calibrationChanged: true,
+  }), true);
 });
 
 test("navigation guard allows unsaved navigation inside the current Profile", () => {

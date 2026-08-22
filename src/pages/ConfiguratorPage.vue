@@ -124,6 +124,7 @@
       </header>
       <StickRoundnessEditor
         :profile="profile"
+        :snapshot="snapshot"
         @update="$emit('stick-shape', $event)"
       />
       <section class="advanced-bounds-section">

@@ -98,6 +98,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import {
   HEADER_ACTION,
   LEAVE_GUARD_KIND,
+  deriveCalibrationGuardPending,
   deriveHeaderState,
   deriveLeaveGuardKind,
   shouldGuardNavigation,
@@ -352,12 +353,13 @@ const calibrationOwnsHeaderActions = computed(() => (
     || !["neutral", "complete"].includes(wizardStep.value)
   )
 ));
-const calibrationPendingForGuard = computed(() => (
-  calibrationWorkflowPending.value
-  || centerCaptureActive.value
-  || centerCaptureStatus.value.completed > 0
-  || calibrationChanged.value
-));
+const calibrationPendingForGuard = computed(() => deriveCalibrationGuardPending({
+  wizardStep: wizardStep.value,
+  workflowPending: calibrationWorkflowPending.value,
+  centerCaptureActive: centerCaptureActive.value,
+  completedCenterReturns: centerCaptureStatus.value.completed,
+  calibrationChanged: calibrationChanged.value,
+}));
 const leaveGuardKind = computed(() => deriveLeaveGuardKind({
   hasApplyDraft: hasApplyDraft.value,
   calibrationPending: calibrationPendingForGuard.value,
