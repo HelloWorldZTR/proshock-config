@@ -161,12 +161,13 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { Q15_ONE, ROUNDNESS_SECTOR_COUNT } from "../protocol.js";
 import {
   USER_SHAPE_Q15_DEFAULT,
   USER_SHAPE_PRESET,
   clampUserShapeQ15,
+  createLatestFrameUpdate,
   createUserShapePreset,
   detectUserShapePreset,
   userShapeQ15FromRadius,
@@ -195,6 +196,11 @@ const presets = [
 const testActive = ref(false);
 const captures = ref([createRoundnessCapture(), createRoundnessCapture()]);
 const dragState = ref(null);
+const dragUpdates = createLatestFrameUpdate(
+  (callback) => window.requestAnimationFrame(callback),
+  (frameId) => window.cancelAnimationFrame(frameId),
+  ({ point, stickIndex }) => updateFromPoint(point, stickIndex),
+);
 const hasSamples = computed(() => captures.value.some((capture) => capture.sampleCount > 0));
 const liveValues = computed(() => {
   const values = props.snapshot?.output_stick_q15;
@@ -320,8 +326,7 @@ function pointerPosition(event) {
   };
 }
 
-function updateFromPointer(event, stickIndex) {
-  const point = pointerPosition(event);
+function updateFromPoint(point, stickIndex) {
   const turns = Math.atan2(point.y, point.x) / (Math.PI * 2);
   const sector = (
     Math.round(turns * ROUNDNESS_SECTOR_COUNT) + ROUNDNESS_SECTOR_COUNT
@@ -330,19 +335,29 @@ function updateFromPointer(event, stickIndex) {
   updateSector(stickIndex, sector, userShapeQ15FromRadius(radius));
 }
 
+function queuePointerUpdate(event, stickIndex) {
+  dragUpdates.push({ point: pointerPosition(event), stickIndex });
+}
+
 function startDrag(event, stickIndex) {
   dragState.value = { pointerId: event.pointerId, stickIndex };
   event.currentTarget.setPointerCapture?.(event.pointerId);
-  updateFromPointer(event, stickIndex);
+  queuePointerUpdate(event, stickIndex);
 }
 
 function continueDrag(event) {
   if (!dragState.value || dragState.value.pointerId !== event.pointerId) return;
-  updateFromPointer(event, dragState.value.stickIndex);
+  queuePointerUpdate(event, dragState.value.stickIndex);
 }
 
 function endDrag(event) {
   if (dragState.value?.pointerId !== event.pointerId) return;
+  if (event.type === "pointercancel") {
+    dragUpdates.cancel();
+  } else {
+    queuePointerUpdate(event, dragState.value.stickIndex);
+    dragUpdates.flush();
+  }
   event.currentTarget.releasePointerCapture?.(event.pointerId);
   dragState.value = null;
 }
@@ -419,4 +434,6 @@ watch(
   },
   { deep: true },
 );
+
+onBeforeUnmount(() => dragUpdates.cancel());
 </script>

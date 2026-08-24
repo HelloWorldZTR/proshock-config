@@ -5,11 +5,45 @@ import {
   USER_SHAPE_Q15_MAX,
   USER_SHAPE_PRESET,
   clampUserShapeQ15,
+  createLatestFrameUpdate,
   createUserShapePreset,
   detectUserShapePreset,
   userShapeQ15FromRadius,
   userShapeTracePoints,
 } from "./roundness-editor.js";
+
+test("drag updates publish only the latest sample in each animation frame", () => {
+  const callbacks = new Map();
+  const published = [];
+  let nextFrameId = 1;
+  const updates = createLatestFrameUpdate(
+    (callback) => {
+      const frameId = nextFrameId;
+      nextFrameId += 1;
+      callbacks.set(frameId, callback);
+      return frameId;
+    },
+    (frameId) => callbacks.delete(frameId),
+    (value) => published.push(value),
+  );
+
+  updates.push({ radius: 0.75 });
+  updates.push({ radius: 1.0 });
+  updates.push({ radius: 1.25 });
+  assert.equal(callbacks.size, 1);
+  callbacks.get(1)();
+  assert.deepEqual(published, [{ radius: 1.25 }]);
+
+  updates.push({ radius: 0.8 });
+  updates.flush();
+  assert.equal(callbacks.has(2), false);
+  assert.deepEqual(published, [{ radius: 1.25 }, { radius: 0.8 }]);
+
+  updates.push({ radius: 0.9 });
+  updates.cancel();
+  assert.equal(callbacks.has(3), false);
+  assert.equal(published.length, 2);
+});
 
 test("advanced stick shape exposes raw unsigned Q1.15 words", () => {
   assert.equal(clampUserShapeQ15(0), 0);

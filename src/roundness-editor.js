@@ -11,6 +11,46 @@ export const USER_SHAPE_PRESET = Object.freeze({
 });
 
 /**
+ * Coalesce high-frequency drag samples into the latest value per display frame.
+ */
+export function createLatestFrameUpdate(scheduleFrame, cancelFrame, publish) {
+  let frameId = null;
+  let pendingValue = null;
+
+  function publishPending() {
+    frameId = null;
+    if (pendingValue === null) return;
+    const value = pendingValue;
+    pendingValue = null;
+    publish(value);
+  }
+
+  return {
+    push(value) {
+      pendingValue = value;
+      if (frameId === null) {
+        frameId = scheduleFrame(publishPending);
+      }
+    },
+    flush() {
+      if (pendingValue === null) return;
+      if (frameId !== null) {
+        cancelFrame(frameId);
+        frameId = null;
+      }
+      publishPending();
+    },
+    cancel() {
+      if (frameId !== null) {
+        cancelFrame(frameId);
+        frameId = null;
+      }
+      pendingValue = null;
+    },
+  };
+}
+
+/**
  * Clamp one directly edited Profile shape value to an unsigned 16-bit word.
  */
 export function clampUserShapeQ15(value) {
