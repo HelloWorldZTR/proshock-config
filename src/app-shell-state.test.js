@@ -4,6 +4,7 @@ import {
   HEADER_ACTION,
   LEAVE_GUARD_KIND,
   deriveCalibrationGuardPending,
+  deriveConfiguratorApplyState,
   deriveHeaderState,
   deriveLeaveGuardKind,
   getPageEntryBlockReason,
@@ -131,4 +132,20 @@ test("calibration page requires a connected controller", () => {
     page: "diagnostics",
     connected: false,
   }), "");
+});
+
+test("Configurator Apply enables only for a valid connected draft", () => {
+  const derive = (overrides = {}) => deriveConfiguratorApplyState({
+    connected: true,
+    busy: false,
+    hasApplyDraft: true,
+    applyValid: true,
+    ...overrides,
+  });
+
+  assert.equal(derive().disabled, false);
+  assert.equal(derive({ connected: false }).disabled, true);
+  assert.equal(derive({ busy: true }).label, "Applying…");
+  assert.equal(derive({ hasApplyDraft: false }).disabled, true);
+  assert.equal(derive({ applyValid: false }).disabled, true);
 });

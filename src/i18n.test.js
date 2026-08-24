@@ -32,6 +32,16 @@ test("analog calibration modes and progress are available in Chinese", () => {
   );
 });
 
+test("Configurator Apply action and states are available in Chinese", () => {
+  assert.equal(translate("Apply current settings", "zh-CN"), "应用当前设置");
+  assert.equal(translate("Applying…", "zh-CN"), "正在应用…");
+  assert.equal(translate("Current settings", "zh-CN"), "当前设置");
+  assert.notEqual(
+    translate("Apply sends current changes to firmware RAM. Save persists them to flash.", "zh-CN"),
+    "Apply sends current changes to firmware RAM. Save persists them to flash.",
+  );
+});
+
 test("physical controller labels match the artwork in every locale", () => {
   [
     "Square", "Cross", "Circle", "Triangle", "Create", "Share", "Options",

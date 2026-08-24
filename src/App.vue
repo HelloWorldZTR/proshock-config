@@ -40,12 +40,13 @@
       :boot-profile="bootProfile" :raw="latestRaw" :snapshot="liveInputSnapshot"
       :calibration="calibrationDraft || defaultCalibration" :config-info="configInfo"
       :connected="connected" :read-digital-input="getDigitalInput"
+      :apply-state="configuratorApplyState"
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
       @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event"
       @calibration-bound="setCalibrationBound"
       @response="setResponse" @resolver="setResolver" @stick-shape="setStickShape" @stick-rc="setStickRc"
       @reset-curves="resetCurves" @copy-curve="copyCurve"
-      @calibrate="requestGo('calibration')"
+      @calibrate="requestGo('calibration')" @apply="applyDraft"
     />
     <QuickCalibrationPage
       v-else-if="page === 'calibration' && !iapMode"
@@ -101,6 +102,7 @@ import {
   HEADER_ACTION,
   LEAVE_GUARD_KIND,
   deriveCalibrationGuardPending,
+  deriveConfiguratorApplyState,
   deriveHeaderState,
   deriveLeaveGuardKind,
   getPageEntryBlockReason,
@@ -344,6 +346,12 @@ const canApply = computed(() => (
   && applyValid.value
 ));
 const canSave = computed(() => connected.value && !busy.value && !!configInfo.value?.dirty && !hasDraft.value);
+const configuratorApplyState = computed(() => deriveConfiguratorApplyState({
+  connected: connected.value,
+  busy: busy.value,
+  hasApplyDraft: hasApplyDraft.value,
+  applyValid: applyValid.value,
+}));
 const calibrationWorkflowPending = computed(() => (
   page.value === "calibration"
   && [

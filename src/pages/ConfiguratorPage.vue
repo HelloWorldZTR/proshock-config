@@ -159,6 +159,18 @@
         <p class="support-note">Stick bounds must remain at least 128 ADC counts away from the calibrated center. Trigger lower bounds must remain below upper bounds. Apply updates RAM; Save is required before switching slots.</p>
       </section>
     </div>
+    <footer class="configurator-apply-footer" aria-label="Current settings">
+      <div aria-live="polite">
+        <strong>Current settings</strong>
+        <span>{{ applyState?.detail }}</span>
+      </div>
+      <button
+        type="button"
+        class="primary"
+        :disabled="applyState?.disabled"
+        @click="$emit('apply')"
+      >{{ applyState?.label || "Apply current settings" }}</button>
+    </footer>
   </div>
 </template>
 
@@ -174,9 +186,9 @@ const props = defineProps({
   section: String, selectedProfile: Number, stateLabel: String, profile: Object,
   baselineProfile: Object, pollrateHz: String, bootProfile: Number, raw: Object,
   snapshot: Object, calibration: Object, configInfo: Object,
-  connected: Boolean, readDigitalInput: Function,
+  connected: Boolean, readDigitalInput: Function, applyState: Object,
 });
-defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "stick-shape", "stick-rc", "calibration-bound", "reset-curves", "copy-curve", "calibrate"]);
+defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "stick-shape", "stick-rc", "calibration-bound", "reset-curves", "copy-curve", "calibrate", "apply"]);
 const tabs = [
   { id: "general", label: "General" }, { id: "sticks", label: "Sticks" },
   { id: "triggers", label: "Triggers" }, { id: "rc", label: "RC" },

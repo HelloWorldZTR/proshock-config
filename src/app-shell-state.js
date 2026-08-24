@@ -22,6 +22,50 @@ export function getPageEntryBlockReason({ page, connected }) {
 }
 
 /**
+ * Derive the disabled state and helper copy for the Configurator Apply button.
+ */
+export function deriveConfiguratorApplyState({
+  connected,
+  busy,
+  hasApplyDraft,
+  applyValid,
+}) {
+  if (!connected) {
+    return {
+      disabled: true,
+      label: "Apply current settings",
+      detail: "Connect the controller to apply changes.",
+    };
+  }
+  if (busy) {
+    return {
+      disabled: true,
+      label: "Applying…",
+      detail: "Waiting for the current device operation to finish.",
+    };
+  }
+  if (!hasApplyDraft) {
+    return {
+      disabled: true,
+      label: "Apply current settings",
+      detail: "Current settings are already applied.",
+    };
+  }
+  if (!applyValid) {
+    return {
+      disabled: true,
+      label: "Apply current settings",
+      detail: "Fix the highlighted errors before applying.",
+    };
+  }
+  return {
+    disabled: false,
+    label: "Apply current settings",
+    detail: "Apply sends current changes to firmware RAM. Save persists them to flash.",
+  };
+}
+
+/**
  * Derive the single global header status and its only available primary action.
  */
 export function deriveHeaderState({
