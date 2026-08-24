@@ -12,6 +12,16 @@ export const LEAVE_GUARD_KIND = Object.freeze({
 });
 
 /**
+ * Return the user-facing reason that a page cannot be entered.
+ */
+export function getPageEntryBlockReason({ page, connected }) {
+  if (page === "calibration" && !connected) {
+    return "Connect the controller before opening Analog Calibration.";
+  }
+  return "";
+}
+
+/**
  * Derive the single global header status and its only available primary action.
  */
 export function deriveHeaderState({

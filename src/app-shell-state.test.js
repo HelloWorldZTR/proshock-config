@@ -6,6 +6,7 @@ import {
   deriveCalibrationGuardPending,
   deriveHeaderState,
   deriveLeaveGuardKind,
+  getPageEntryBlockReason,
   shouldGuardNavigation,
 } from "./app-shell-state.js";
 
@@ -115,4 +116,19 @@ test("navigation guard allows unsaved navigation inside the current Profile", ()
     currentProfile: 0,
     destructive: true,
   }), true);
+});
+
+test("calibration page requires a connected controller", () => {
+  assert.equal(getPageEntryBlockReason({
+    page: "calibration",
+    connected: false,
+  }), "Connect the controller before opening Analog Calibration.");
+  assert.equal(getPageEntryBlockReason({
+    page: "calibration",
+    connected: true,
+  }), "");
+  assert.equal(getPageEntryBlockReason({
+    page: "diagnostics",
+    connected: false,
+  }), "");
 });

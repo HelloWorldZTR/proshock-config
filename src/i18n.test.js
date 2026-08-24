@@ -57,6 +57,7 @@ test("right-corner notifications are available in Chinese", () => {
     "Full device backup exported.",
     "Profile imported to Slot 2 as a draft.",
     "Controller reconnected. Unsaved work was preserved.",
+    "Connect the controller before opening Analog Calibration.",
     "WebHID disconnected. The game controller remains available.",
     "WebHID disconnected. Unsaved work was preserved in this page.",
     "WebHID disconnected. The game controller may remain available.",

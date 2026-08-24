@@ -103,6 +103,7 @@ import {
   deriveCalibrationGuardPending,
   deriveHeaderState,
   deriveLeaveGuardKind,
+  getPageEntryBlockReason,
   shouldGuardNavigation,
 } from "./app-shell-state.js";
 import AppHeader from "./components/AppHeader.vue";
@@ -587,6 +588,17 @@ function parseRouteHash(hash) {
 }
 
 async function performParsedRoute(route) {
+  const entryBlockReason = getPageEntryBlockReason({
+    page: route.page,
+    connected: connected.value,
+  });
+  if (entryBlockReason) {
+    notify(entryBlockReason);
+    if (!currentRouteHash) {
+      performGo("home");
+    }
+    return false;
+  }
   if (route.profileIndex !== selectedProfile.value) {
     if (connected.value) {
       if (!await switchProfile(route.profileIndex)) {

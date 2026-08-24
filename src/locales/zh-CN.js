@@ -130,6 +130,7 @@ registerLocale("zh-CN", "中文", {
   "Full device backup exported.": "完整设备备份已导出。",
   "Profile imported to Slot {slot} as a draft.": "槽位配置已作为草稿导入到槽位 {slot}。",
   "Controller reconnected. Unsaved work was preserved.": "手柄已重新连接，未保存的更改已保留。",
+  "Connect the controller before opening Analog Calibration.": "请先连接手柄，再进入模拟量校准。",
   "WebHID disconnected. The game controller remains available.": "WebHID 已断开，游戏手柄仍可正常使用。",
   "WebHID disconnected. Unsaved work was preserved in this page.": "WebHID 已断开，未保存的更改仍保留在当前页面。",
   "WebHID disconnected. The game controller may remain available.": "WebHID 已断开，游戏手柄可能仍可正常使用。",
