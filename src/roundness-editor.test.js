@@ -56,10 +56,27 @@ test("advanced stick shape exposes raw unsigned Q1.15 words", () => {
 
 test("built-in shapes are inscribed, symmetric, and detectable", () => {
   const circle = createUserShapePreset(USER_SHAPE_PRESET.CIRCLE);
+  const squircle = createUserShapePreset(USER_SHAPE_PRESET.SQUIRCLE);
   const square = createUserShapePreset(USER_SHAPE_PRESET.SQUARE);
   const octagon = createUserShapePreset(USER_SHAPE_PRESET.OCTAGON);
 
   assert.deepEqual(circle, Array(16).fill(USER_SHAPE_Q15_DEFAULT));
+  assert.deepEqual(squircle, [
+    27554, 29609, 32768, 29609,
+    27554, 29609, 32768, 29609,
+    27554, 29609, 32768, 29609,
+    27554, 29609, 32768, 29609,
+  ]);
+  assert.equal(squircle[2], USER_SHAPE_Q15_DEFAULT);
+  assert.equal(squircle[0], squircle[4]);
+  squircle.forEach((value, sector) => {
+    assert.ok(value >= square[sector]);
+    assert.ok(value <= circle[sector]);
+  });
+  assert.equal(
+    detectUserShapePreset(squircle),
+    USER_SHAPE_PRESET.SQUIRCLE,
+  );
   assert.equal(square[0], square[4]);
   assert.equal(square[2], USER_SHAPE_Q15_DEFAULT);
   assert.ok(square[0] < square[1] && square[1] < square[2]);

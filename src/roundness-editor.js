@@ -5,6 +5,7 @@ export const USER_SHAPE_DRAG_MIN = 0.5;
 export const USER_SHAPE_DRAG_MAX = 1.25;
 export const USER_SHAPE_PRESET = Object.freeze({
   CIRCLE: "circle",
+  SQUIRCLE: "squircle",
   SQUARE: "square",
   OCTAGON: "octagon",
   CUSTOM: "custom",
@@ -67,10 +68,24 @@ export function clampUserShapeQ15(value) {
 /**
  * Build one 16-sector target shape in the firmware's post-flip coordinates.
  *
- * Square and octagon presets are inscribed in the unit circle so the firmware
- * can reproduce every boundary without relying on radial values above 1.0.
+ * Rounded-square, square, and octagon presets are inscribed in the unit circle
+ * so the firmware can reproduce every boundary without radial overflow.
  */
 export function createUserShapePreset(preset) {
+  if (preset === USER_SHAPE_PRESET.SQUIRCLE) {
+    const power = 4;
+    const halfExtent = 2 ** ((1 / power) - 0.5);
+    return Array.from({ length: 16 }, (_, sector) => {
+      const angle = sector * Math.PI * 2 / 16;
+      const denominator = (
+        Math.abs(Math.cos(angle)) ** power
+        + Math.abs(Math.sin(angle)) ** power
+      ) ** (1 / power);
+      return Math.round(
+        halfExtent / denominator * USER_SHAPE_Q15_DEFAULT,
+      );
+    });
+  }
   if (preset === USER_SHAPE_PRESET.SQUARE) {
     const halfExtent = 1 / Math.sqrt(2);
     return Array.from({ length: 16 }, (_, sector) => {
@@ -97,6 +112,7 @@ export function createUserShapePreset(preset) {
 export function detectUserShapePreset(values, tolerance = 1) {
   for (const preset of [
     USER_SHAPE_PRESET.CIRCLE,
+    USER_SHAPE_PRESET.SQUIRCLE,
     USER_SHAPE_PRESET.SQUARE,
     USER_SHAPE_PRESET.OCTAGON,
   ]) {

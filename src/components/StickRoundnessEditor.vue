@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">Profile stick shape</p>
         <h2>Visual roundness editor</h2>
-        <p>Drag any sector handle to shape this Slot, then Apply and test the firmware output against the target.</p>
+        <p>Switch between circle, rounded-square, square, and octagon output, or drag any sector handle for a custom shape.</p>
       </div>
       <div class="roundness-test-actions">
         <button type="button" :class="{ active: testActive }" @click="toggleTest">
@@ -189,6 +189,7 @@ const sectorIndexes = Array.from({ length: ROUNDNESS_SECTOR_COUNT }, (_, index) 
 const sticks = [{ label: "Left stick" }, { label: "Right stick" }];
 const presets = [
   { id: USER_SHAPE_PRESET.CIRCLE, label: "Circle shape" },
+  { id: USER_SHAPE_PRESET.SQUIRCLE, label: "Rounded square" },
   { id: USER_SHAPE_PRESET.SQUARE, label: "Square shape" },
   { id: USER_SHAPE_PRESET.OCTAGON, label: "Octagon shape" },
   { id: USER_SHAPE_PRESET.CUSTOM, label: "Custom shape" },
@@ -230,6 +231,7 @@ function activePreset(stickIndex) {
 function presetLabel(stickIndex) {
   return {
     [USER_SHAPE_PRESET.CIRCLE]: "Circle preset",
+    [USER_SHAPE_PRESET.SQUIRCLE]: "Rounded-square preset",
     [USER_SHAPE_PRESET.SQUARE]: "Square preset",
     [USER_SHAPE_PRESET.OCTAGON]: "Octagon preset",
     [USER_SHAPE_PRESET.CUSTOM]: "User custom",

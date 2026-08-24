@@ -60,6 +60,11 @@ test("button debounce control is available in Chinese", () => {
   assert.equal(translate("4 ms · 32 samples", "zh-CN"), "4 ms · 32 个样本");
 });
 
+test("rounded-square stick mode is available in Chinese", () => {
+  assert.equal(translate("Rounded square", "zh-CN"), "方圆形");
+  assert.equal(translate("Rounded-square preset", "zh-CN"), "方圆形预设");
+});
+
 test("physical controller labels match the artwork in every locale", () => {
   [
     "Square", "Cross", "Circle", "Triangle", "Create", "Share", "Options",

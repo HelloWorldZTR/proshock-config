@@ -206,7 +206,7 @@ label { display: grid; gap: 8px; color: var(--secondary); font-size: 13px; }
 .roundness-result-badge { padding: 5px 7px; border: 1px solid var(--border); color: var(--muted); font: 8px ui-monospace, monospace; text-transform: uppercase; letter-spacing: .04em; }
 .roundness-result-badge.good { border-color: color-mix(in srgb, var(--success) 55%, transparent); color: var(--success); background: color-mix(in srgb, var(--success) 8%, transparent); }
 .roundness-result-badge.bad { border-color: color-mix(in srgb, var(--danger) 55%, transparent); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
-.roundness-preset-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.roundness-preset-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .roundness-preset-row button { min-width: 0; min-height: 30px; padding: 4px 6px; font-size: 9px; }
 .roundness-preset-row button.active { border-color: var(--accent); color: var(--accent); background: rgba(85,214,255,.07); }
 .roundness-visual-layout { min-width: 0; display: grid; grid-template-columns: minmax(230px, 1fr) 126px; align-items: center; gap: 12px; }
