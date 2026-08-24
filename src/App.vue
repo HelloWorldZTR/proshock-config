@@ -44,7 +44,8 @@
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
       @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event"
       @calibration-bound="setCalibrationBound"
-      @response="setResponse" @resolver="setResolver" @stick-shape="setStickShape" @stick-rc="setStickRc"
+      @response="setResponse" @resolver="setResolver" @button-debounce="setButtonDebounce"
+      @stick-shape="setStickShape" @stick-rc="setStickRc"
       @reset-curves="resetCurves" @copy-curve="copyCurve"
       @calibrate="requestGo('calibration')" @apply="applyDraft"
     />
@@ -131,6 +132,7 @@ import {
 import {
   ANALOG_CALIBRATION_SIZE,
   ANALOG_CALIBRATION_VERSION,
+  BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
   COMMAND,
   CONFIG_STATUS_NAME,
   PROFILE_CHUNK_DATA_SIZE,
@@ -149,6 +151,7 @@ import {
   makeProfileColorPayload,
   makeSwitchProfilePayload,
   makeVersionPayload,
+  normalizeButtonDebounceSamples,
   parseAnalogCalibration,
   parseAnalogSnapshot,
   parseConfigInfo,
@@ -714,6 +717,13 @@ function setResponse({ kind, index, value }) {
 function setResolver(value) {
   if (profileDraft.value) {
     profileDraft.value.resolver = value;
+  }
+}
+
+function setButtonDebounce(value) {
+  if (profileDraft.value) {
+    profileDraft.value.button_debounce_samples =
+      normalizeButtonDebounceSamples(value);
   }
 }
 
@@ -1809,6 +1819,7 @@ function createFallbackProfile() {
     profile_version: PROFILE_VERSION,
     flags: 0,
     color_rgb: [0x30, 0x80, 0xff],
+    button_debounce_samples: BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
     pollrate_hz: 1000,
     stick_response: [createLinearResponse(), createLinearResponse()],
     trigger_response: [createLinearResponse(), createLinearResponse()],

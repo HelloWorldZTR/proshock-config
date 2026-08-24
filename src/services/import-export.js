@@ -1,7 +1,10 @@
 import {
   ANALOG_CALIBRATION_SIZE,
+  BUTTON_DEBOUNCE_MAX_SAMPLES,
+  BUTTON_DEBOUNCE_MIN_SAMPLES,
   LEGACY_PROFILE_SIZE,
   LEGACY_PROFILE_VERSION,
+  PREVIOUS_PROFILE_VERSION,
   PROFILE_SIZE,
   PROFILE_VERSION,
   SCHEMA_VERSION,
@@ -53,6 +56,22 @@ function serialize(format, payload) {
   };
 }
 
+function migrateProfileBytes(source, profileVersion) {
+  const isV5 = profileVersion === LEGACY_PROFILE_VERSION
+    && source.byteLength === LEGACY_PROFILE_SIZE;
+  const isV6 = profileVersion === PREVIOUS_PROFILE_VERSION
+    && source.byteLength === PROFILE_SIZE;
+  return (isV5 || isV6)
+    ? migrateLegacyProfilePayload(source, profileVersion)
+    : source;
+}
+
+function hasCurrentProfileLayout(source) {
+  if (source.byteLength !== PROFILE_SIZE) return false;
+  return new DataView(source.buffer, source.byteOffset, source.byteLength)
+    .getUint16(0, true) === PROFILE_VERSION;
+}
+
 export function exportProfile(profile) {
   const bytes = new Uint8Array(profile.raw);
   writeProfileDraftToPayload(bytes, profile);
@@ -89,14 +108,11 @@ export function importProfile(envelope, targetIndex, baselineRaw = null) {
   if (envelope.format !== PROFILE_FORMAT) throw new Error("Choose a Profile file, not a full device backup.");
   let source = base64ToBytes(envelope.payload.profile_bytes);
   if (
-    envelope.payload.profile_version === LEGACY_PROFILE_VERSION
-    && source.byteLength === LEGACY_PROFILE_SIZE
-  ) {
-    source = migrateLegacyProfilePayload(source);
-  } else if (
     envelope.payload.profile_version !== PROFILE_VERSION
-    || source.byteLength !== PROFILE_SIZE
   ) {
+    source = migrateProfileBytes(source, envelope.payload.profile_version);
+  }
+  if (!hasCurrentProfileLayout(source)) {
     throw new Error("Profile version requires an explicit migration.");
   }
   const imported = parseProfile(source, targetIndex);
@@ -108,6 +124,12 @@ export function importProfile(envelope, targetIndex, baselineRaw = null) {
   }
   if (!imported.stick_rc.every(validateStickRc)) {
     throw new Error("Profile contains invalid RC filter settings.");
+  }
+  if (
+    imported.button_debounce_samples < BUTTON_DEBOUNCE_MIN_SAMPLES
+    || imported.button_debounce_samples > BUTTON_DEBOUNCE_MAX_SAMPLES
+  ) {
+    throw new Error("Profile contains an invalid button debounce duration.");
   }
   if (baselineRaw) {
     const preserved = new Uint8Array(baselineRaw);
@@ -122,15 +144,10 @@ export function importProfile(envelope, targetIndex, baselineRaw = null) {
 
 function importBackupProfile(payload, index) {
   let source = base64ToBytes(payload.profile_bytes);
-  if (
-    payload.profile_version === LEGACY_PROFILE_VERSION
-    && source.byteLength === LEGACY_PROFILE_SIZE
-  ) {
-    source = migrateLegacyProfilePayload(source);
-  } else if (
-    payload.profile_version !== PROFILE_VERSION
-    || source.byteLength !== PROFILE_SIZE
-  ) {
+  if (payload.profile_version !== PROFILE_VERSION) {
+    source = migrateProfileBytes(source, payload.profile_version);
+  }
+  if (!hasCurrentProfileLayout(source)) {
     throw new Error(`Backup Profile ${index + 1} requires an explicit migration.`);
   }
   const profile = parseProfile(source, index);
@@ -142,6 +159,12 @@ function importBackupProfile(payload, index) {
   }
   if (!profile.stick_rc.every(validateStickRc)) {
     throw new Error(`Backup Profile ${index + 1} contains invalid RC filter settings.`);
+  }
+  if (
+    profile.button_debounce_samples < BUTTON_DEBOUNCE_MIN_SAMPLES
+    || profile.button_debounce_samples > BUTTON_DEBOUNCE_MAX_SAMPLES
+  ) {
+    throw new Error(`Backup Profile ${index + 1} contains an invalid button debounce duration.`);
   }
   return profile;
 }

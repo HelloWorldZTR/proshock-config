@@ -1,12 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
+  BUTTON_DEBOUNCE_MAX_SAMPLES,
+  BUTTON_DEBOUNCE_MIN_SAMPLES,
   CONFIG_INFO_SIZE,
   LEGACY_CONFIG_INFO_SIZE,
+  PROFILE_SIZE,
+  PROFILE_VERSION,
+  SCHEMA_VERSION,
+  createDefaultStickRc,
+  createLinearResponse,
   digitalMaskFromRawInput,
   makeProfileColorPayload,
+  normalizeButtonDebounceSamples,
   parseConfigInfo,
   parseDigitalInput,
+  parseProfile,
+  writeProfileDraftToPayload,
 } from "./protocol.js";
 
 test("profile color Apply uses one indexed RGB payload", () => {
@@ -16,10 +27,31 @@ test("profile color Apply uses one indexed RGB payload", () => {
   );
 });
 
+test("Profile v7 stores the button debounce window in header byte 7", () => {
+  const payload = new Uint8Array(PROFILE_SIZE);
+  writeProfileDraftToPayload(payload, {
+    profile_version: PROFILE_VERSION,
+    flags: 0,
+    color_rgb: [1, 2, 3],
+    button_debounce_samples: 17,
+    pollrate_hz: 8000,
+    stick_response: [createLinearResponse(), createLinearResponse()],
+    trigger_response: [createLinearResponse(), createLinearResponse()],
+    stick_rc: [createDefaultStickRc(), createDefaultStickRc()],
+  });
+
+  assert.equal(payload[7], 17);
+  assert.equal(parseProfile(payload).button_debounce_samples, 17);
+  assert.equal(normalizeButtonDebounceSamples(0), BUTTON_DEBOUNCE_MIN_SAMPLES);
+  assert.equal(normalizeButtonDebounceSamples(99), BUTTON_DEBOUNCE_MAX_SAMPLES);
+  assert.equal(normalizeButtonDebounceSamples(null), BUTTON_DEBOUNCE_MIN_SAMPLES);
+  assert.equal(normalizeButtonDebounceSamples(undefined), BUTTON_DEBOUNCE_DEFAULT_SAMPLES);
+});
+
 function configInfoPayload(size) {
   const payload = new Uint8Array(size);
   const view = new DataView(payload.buffer);
-  view.setUint16(0, 9, true);
+  view.setUint16(0, SCHEMA_VERSION, true);
   view.setUint16(2, 384, true);
   payload[4] = 4;
   return payload;

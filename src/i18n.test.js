@@ -53,6 +53,13 @@ test("Configurator Apply action and states are available in Chinese", () => {
   );
 });
 
+test("button debounce control is available in Chinese", () => {
+  assert.equal(translate("Button response", "zh-CN"), "按键响应");
+  assert.equal(translate("Button debounce", "zh-CN"), "按键消抖");
+  assert.equal(translate("Button debounce duration", "zh-CN"), "按键消抖时间");
+  assert.equal(translate("4 ms · 32 samples", "zh-CN"), "4 ms · 32 个样本");
+});
+
 test("physical controller labels match the artwork in every locale", () => {
   [
     "Square", "Cross", "Circle", "Triangle", "Create", "Share", "Options",

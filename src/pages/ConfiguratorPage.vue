@@ -66,14 +66,37 @@
       :axis-invert="configInfo?.axis_invert"
       @update="$emit('stick-rc', $event)"
     />
-    <ResolverEditor
-      v-else-if="section === 'buttons'"
-      :resolver="profile?.resolver"
-      :raw="raw"
-      :connected="connected"
-      :read-digital-input="readDigitalInput"
-      @update="$emit('resolver', $event)"
-    />
+    <div v-else-if="section === 'buttons'" class="button-config-stack">
+      <section class="form-section button-debounce-section">
+        <header>
+          <h1>Button response</h1>
+          <p>Set how long a physical button must stay stable before its edge is accepted.</p>
+        </header>
+        <label>
+          <span>
+            Button debounce
+            <small>{{ buttonDebounceMs }} ms · {{ buttonDebounceSamples }} samples</small>
+          </span>
+          <input
+            type="range"
+            :min="BUTTON_DEBOUNCE_MIN_SAMPLES"
+            :max="BUTTON_DEBOUNCE_MAX_SAMPLES"
+            step="1"
+            :value="buttonDebounceSamples"
+            aria-label="Button debounce duration"
+            @input="$emit('button-debounce', Number($event.target.value))"
+          >
+        </label>
+        <p class="support-note">At the fixed 8 kHz input cadence, each sample is 0.125 ms. Apply updates this Profile in RAM; Save persists it.</p>
+      </section>
+      <ResolverEditor
+        :resolver="profile?.resolver"
+        :raw="raw"
+        :connected="connected"
+        :read-digital-input="readDigitalInput"
+        @update="$emit('resolver', $event)"
+      />
+    </div>
     <section v-else-if="section === 'lighting'" class="form-section lighting-section">
       <header>
         <h1>Profile lighting</h1>
@@ -181,6 +204,12 @@ import InputViewer from "../components/InputViewer.vue";
 import RCFilterEditor from "../components/RCFilterEditor.vue";
 import ResolverEditor from "../components/ResolverEditor.vue";
 import StickRoundnessEditor from "../components/StickRoundnessEditor.vue";
+import {
+  BUTTON_DEBOUNCE_MAX_SAMPLES,
+  BUTTON_DEBOUNCE_MIN_SAMPLES,
+  BUTTON_DEBOUNCE_SAMPLE_MS,
+  normalizeButtonDebounceSamples,
+} from "../protocol.js";
 
 const props = defineProps({
   section: String, selectedProfile: Number, stateLabel: String, profile: Object,
@@ -188,7 +217,7 @@ const props = defineProps({
   snapshot: Object, calibration: Object, configInfo: Object,
   connected: Boolean, readDigitalInput: Function, applyState: Object,
 });
-defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "stick-shape", "stick-rc", "calibration-bound", "reset-curves", "copy-curve", "calibrate", "apply"]);
+defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "button-debounce", "stick-shape", "stick-rc", "calibration-bound", "reset-curves", "copy-curve", "calibrate", "apply"]);
 const tabs = [
   { id: "general", label: "General" }, { id: "sticks", label: "Sticks" },
   { id: "triggers", label: "Triggers" }, { id: "rc", label: "RC" },
@@ -204,4 +233,10 @@ const lightingSwatches = [
 const responses = computed(() => props.section === "sticks" ? props.profile?.stick_response || [] : props.profile?.trigger_response || []);
 const baselineResponses = computed(() => props.section === "sticks" ? props.baselineProfile?.stick_response : props.baselineProfile?.trigger_response);
 const responseLabels = computed(() => props.section === "sticks" ? ["Left stick radial response", "Right stick radial response"] : ["L2 response", "R2 response"]);
+const buttonDebounceSamples = computed(() => normalizeButtonDebounceSamples(
+  props.profile?.button_debounce_samples,
+));
+const buttonDebounceMs = computed(() => Number(
+  (buttonDebounceSamples.value * BUTTON_DEBOUNCE_SAMPLE_MS).toFixed(3),
+));
 </script>

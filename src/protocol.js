@@ -80,9 +80,10 @@ export const CONFIG_INFO_SIZE = 56;
 export const RAW_SIZE = 20;
 export const DIGITAL_INPUT_SIZE = 8;
 export const PROTOCOL_VERSION = 2;
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 export const LEGACY_PROFILE_VERSION = 5;
-export const PROFILE_VERSION = 6;
+export const PREVIOUS_PROFILE_VERSION = 6;
+export const PROFILE_VERSION = 7;
 export const ANALOG_CALIBRATION_VERSION = 1;
 export const CURVE_POINT_COUNT = 9;
 export const CURVE_TYPE_PIECEWISE_LINEAR = 1;
@@ -94,6 +95,10 @@ export const STICK_RC_FLAG_SMOOTHING = 0x01;
 export const STICK_RC_FLAG_BOOST = 0x02;
 export const STICK_RC_ALPHA_MAX_Q15 = 32767;
 export const STICK_RC_GAIN_MAX_Q8_8 = 512;
+export const BUTTON_DEBOUNCE_MIN_SAMPLES = 1;
+export const BUTTON_DEBOUNCE_MAX_SAMPLES = 32;
+export const BUTTON_DEBOUNCE_DEFAULT_SAMPLES = 8;
+export const BUTTON_DEBOUNCE_SAMPLE_MS = 0.125;
 
 const RESPONSE_SIZE = 24;
 const STICK_RESPONSE_OFFSET = 8;
@@ -200,6 +205,15 @@ export function createDefaultStickRc() {
   };
 }
 
+export function normalizeButtonDebounceSamples(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return BUTTON_DEBOUNCE_DEFAULT_SAMPLES;
+  return Math.max(
+    BUTTON_DEBOUNCE_MIN_SAMPLES,
+    Math.min(BUTTON_DEBOUNCE_MAX_SAMPLES, Math.round(numeric)),
+  );
+}
+
 function parseStickRc(view, offset) {
   return {
     flags: view.getUint8(offset),
@@ -231,7 +245,7 @@ export function parseProfile(payload, index = 0) {
     profile_version: view.getUint16(0, true),
     flags: view.getUint16(2, true),
     color_rgb: [payload[4], payload[5], payload[6]],
-    reserved0: payload[7],
+    button_debounce_samples: payload[7],
     pollrate_hz: view.getUint32(PROFILE_POLL_RATE_OFFSET, true),
     stick_response: Array.from(
       { length: 2 },
@@ -274,6 +288,9 @@ export function writeProfileDraftToPayload(payload, draft, resolverOptions = {})
   view.setUint16(0, PROFILE_VERSION, true);
   view.setUint16(2, draft.flags || 0, true);
   payload.set(draft.color_rgb.map((value) => Math.max(0, Math.min(255, value))), 4);
+  payload[7] = normalizeButtonDebounceSamples(
+    draft.button_debounce_samples,
+  );
   draft.stick_response.forEach((response, index) => {
     writeResponse(view, STICK_RESPONSE_OFFSET + index * RESPONSE_SIZE, response);
   });
@@ -307,22 +324,38 @@ export function writeProfileDraftToPayload(payload, draft, resolverOptions = {})
   });
 }
 
-export function migrateLegacyProfilePayload(payload) {
-  if (payload.byteLength !== LEGACY_PROFILE_SIZE) {
-    throw new Error(`Legacy Profile must be ${LEGACY_PROFILE_SIZE} bytes.`);
+export function migrateLegacyProfilePayload(
+  payload,
+  profileVersion = LEGACY_PROFILE_VERSION,
+) {
+  const embeddedVersion = payload.byteLength >= 2
+    ? new DataView(payload.buffer, payload.byteOffset, payload.byteLength)
+      .getUint16(0, true)
+    : -1;
+  const isV5 = profileVersion === LEGACY_PROFILE_VERSION
+    && embeddedVersion === LEGACY_PROFILE_VERSION
+    && payload.byteLength === LEGACY_PROFILE_SIZE;
+  const isV6 = profileVersion === PREVIOUS_PROFILE_VERSION
+    && embeddedVersion === PREVIOUS_PROFILE_VERSION
+    && payload.byteLength === PROFILE_SIZE;
+  if (!isV5 && !isV6) {
+    throw new Error("Profile version requires an explicit migration.");
   }
   const migrated = new Uint8Array(PROFILE_SIZE);
   migrated.set(payload);
   const view = new DataView(migrated.buffer);
   view.setUint16(0, PROFILE_VERSION, true);
-  STICKS.forEach((name, stickIndex) => {
-    writeStickRc(
-      migrated,
-      view,
-      STICK_RC_OFFSET + stickIndex * STICK_RC_SIZE,
-      createDefaultStickRc(),
-    );
-  });
+  migrated[7] = BUTTON_DEBOUNCE_DEFAULT_SAMPLES;
+  if (isV5) {
+    STICKS.forEach((name, stickIndex) => {
+      writeStickRc(
+        migrated,
+        view,
+        STICK_RC_OFFSET + stickIndex * STICK_RC_SIZE,
+        createDefaultStickRc(),
+      );
+    });
+  }
   return migrated;
 }
 

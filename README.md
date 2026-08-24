@@ -61,6 +61,8 @@ npm run build
 - `Apply calibration` 只更新设备 RAM shadow，不修改 profile deadzone 或 curve。
 - `Apply response` 只更新当前 profile。
 - `Save` 才触发固件的 A/B flash fail-safe 保存路径。
+- 按键页可按每个 Profile 设置 1～32 个固定 8 kHz 输入样本的消抖窗口，即
+  0.125～4 ms；默认 8 个样本（1 ms），修改后同样需要依次 `Apply`、`Save`。
 - 校验页面使用固件返回的真实 Q15/HID 输出，不以浏览器预览代替设备结果。
 - `Analog Calibration` 每次默认使用快速模式，在摇杆保持居中时采集单个中心窗口；
   标准模式会自动识别左上、右下、右上、左下四次推满与释放，不需要逐次确认。

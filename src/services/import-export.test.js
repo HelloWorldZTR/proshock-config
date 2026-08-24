@@ -11,8 +11,10 @@ import {
 } from "./import-export.js";
 import {
   ANALOG_CALIBRATION_SIZE,
+  BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
   LEGACY_PROFILE_SIZE,
   LEGACY_PROFILE_VERSION,
+  PREVIOUS_PROFILE_VERSION,
   PROFILE_SIZE,
   PROFILE_VERSION,
   createLinearResponse,
@@ -31,6 +33,7 @@ function fixtureProfile() {
     profile_version: PROFILE_VERSION,
     flags: 3,
     color_rgb: [0x55, 0xd6, 0xff],
+    button_debounce_samples: BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
     pollrate_hz: 4000,
     stick_response: [createLinearResponse(), createLinearResponse()],
     trigger_response: [createLinearResponse(), createLinearResponse()],
@@ -88,6 +91,30 @@ test("Profile v5 imports append disabled RC defaults", () => {
   assert.equal(imported.profile_version, PROFILE_VERSION);
   assert.equal(imported.raw.byteLength, PROFILE_SIZE);
   assert.deepEqual(imported.stick_rc.map((rc) => rc.flags), [0, 0]);
+  assert.equal(imported.button_debounce_samples, BUTTON_DEBOUNCE_DEFAULT_SAMPLES);
+});
+
+test("Profile v6 imports preserve RC settings and default button debounce", () => {
+  const previous = fixtureProfile();
+  previous.stick_rc[0].flags = 1;
+  writeProfileDraftToPayload(previous.raw, previous);
+  new DataView(previous.raw.buffer).setUint16(0, PREVIOUS_PROFILE_VERSION, true);
+  previous.raw[7] = 0xa5;
+  const payload = {
+    profile_version: PREVIOUS_PROFILE_VERSION,
+    profile_bytes: Buffer.from(previous.raw).toString("base64"),
+  };
+  const encoded = new TextEncoder().encode(JSON.stringify(payload));
+  const imported = importProfile({
+    format: PROFILE_FORMAT,
+    export_version: 1,
+    payload,
+    crc32: crc32(encoded).toString(16).padStart(8, "0"),
+  }, 2);
+
+  assert.equal(imported.profile_version, PROFILE_VERSION);
+  assert.equal(imported.button_debounce_samples, BUTTON_DEBOUNCE_DEFAULT_SAMPLES);
+  assert.equal(imported.stick_rc[0].flags, 1);
 });
 
 test("legacy full backups migrate all four Profile v5 payloads", () => {
@@ -114,6 +141,9 @@ test("legacy full backups migrate all four Profile v5 payloads", () => {
   assert.ok(migrated.profiles.every((profile) => profile.profile_version === PROFILE_VERSION));
   assert.ok(migrated.profiles.every((profile) => profile.raw.byteLength === PROFILE_SIZE));
   assert.ok(migrated.profiles.every((profile) => profile.stick_rc.every((rc) => rc.flags === 0)));
+  assert.ok(migrated.profiles.every(
+    (profile) => profile.button_debounce_samples === BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
+  ));
 });
 
 test("Profile import rejects invalid RC ordering", () => {
@@ -134,4 +164,22 @@ test("Profile import rejects invalid RC ordering", () => {
     crc32: crc32(encoded).toString(16).padStart(8, "0"),
   };
   assert.throws(() => importProfile(envelope, 0), /invalid RC/);
+});
+
+test("Profile import rejects an out-of-range button debounce window", () => {
+  const profile = fixtureProfile();
+  const bytes = new Uint8Array(profile.raw);
+  bytes[7] = 0;
+  const payload = {
+    profile_version: PROFILE_VERSION,
+    profile_bytes: Buffer.from(bytes).toString("base64"),
+  };
+  const encoded = new TextEncoder().encode(JSON.stringify(payload));
+  const envelope = {
+    format: PROFILE_FORMAT,
+    export_version: 1,
+    payload,
+    crc32: crc32(encoded).toString(16).padStart(8, "0"),
+  };
+  assert.throws(() => importProfile(envelope, 0), /invalid button debounce/);
 });
