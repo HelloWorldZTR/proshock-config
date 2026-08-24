@@ -59,6 +59,8 @@ npm run build
 ## 配置语义
 
 - `Apply calibration` 只更新设备 RAM shadow，不修改 profile deadzone 或 curve。
+- 校准采集只读取原始 ADC；应用后会逐字节复核四个完整 384 字节 Profile，固件则
+  先应用物理校正，再恢复当前 Profile 的正圆、方圆形、方形、八边形或自定义形状。
 - `Apply response` 只更新当前 profile。
 - `Save` 才触发固件的 A/B flash fail-safe 保存路径。
 - 按键页可按每个 Profile 设置 1～32 个固定 8 kHz 输入样本的消抖窗口，即

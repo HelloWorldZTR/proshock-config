@@ -3,6 +3,8 @@ import {
   ANALOG_CALIBRATION_VERSION,
   AXES,
   CURVE_TYPE_PIECEWISE_LINEAR,
+  PROFILE_COUNT,
+  PROFILE_SIZE,
   Q15_ONE,
   ROUNDNESS_Q15_ONE,
   ROUNDNESS_SECTOR_COUNT,
@@ -53,6 +55,30 @@ export const CURVE_PRESETS = {
   centerAggressive: [0, 0.20, 0.36, 0.50, 0.62, 0.73, 0.83, 0.92, 1],
   earlyFull: [0, 0.167, 0.333, 0.5, 0.667, 0.833, 1, 1, 1],
 };
+
+/**
+ * Build an exact guard signature for all Profile payload bytes.
+ *
+ * Calibration owns only the device-level analog object, so every byte in
+ * every Profile must remain identical across Apply, including reserved bytes.
+ */
+export function profilePayloadSignature(profiles) {
+  if (!Array.isArray(profiles) || profiles.length !== PROFILE_COUNT) {
+    throw new Error(`Calibration requires exactly ${PROFILE_COUNT} Profiles.`);
+  }
+  return profiles.map((profile, profileIndex) => {
+    const raw = profile?.raw;
+    if (!(raw instanceof Uint8Array) || raw.byteLength !== PROFILE_SIZE) {
+      throw new Error(
+        `Profile ${profileIndex + 1} must contain ${PROFILE_SIZE} raw bytes.`,
+      );
+    }
+    return Array.from(
+      raw,
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("");
+  }).join("|");
+}
 
 export function clampRaw(value) {
   const numeric = Number(value);

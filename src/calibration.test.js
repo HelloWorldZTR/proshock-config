@@ -26,6 +26,7 @@ import {
   createTriggerCycleCapture,
   nextWizardStep,
   normalizeAxis,
+  profilePayloadSignature,
   recordCenterReturnSample,
   recordQuickCenterSample,
   recordTriggerCycleSample,
@@ -59,6 +60,37 @@ test("config cloning unwraps proxies and preserves binary payloads", () => {
   cloned.raw[0] = 9;
   assert.equal(source.nested.value, 42);
   assert.equal(raw[0], 1);
+});
+
+test("calibration integrity guard covers every byte of every Profile", () => {
+  const profiles = Array.from({ length: 4 }, (_, profileIndex) => ({
+    raw: Uint8Array.from(
+      { length: PROFILE_SIZE },
+      (_, byteIndex) => (profileIndex * 53 + byteIndex) & 0xff,
+    ),
+  }));
+  const baseline = profilePayloadSignature(profiles);
+
+  profiles.forEach((profile) => {
+    profile.raw.forEach((original, byteIndex) => {
+      profile.raw[byteIndex] = original ^ 0x01;
+      assert.notEqual(profilePayloadSignature(profiles), baseline);
+      profile.raw[byteIndex] = original;
+    });
+  });
+  assert.equal(profilePayloadSignature(profiles), baseline);
+  assert.throws(
+    () => profilePayloadSignature(profiles.slice(0, 3)),
+    /exactly 4 Profiles/,
+  );
+  const shortPayloads = profiles.map((profile) => ({
+    raw: new Uint8Array(profile.raw),
+  }));
+  shortPayloads[0].raw = new Uint8Array(PROFILE_SIZE - 1);
+  assert.throws(
+    () => profilePayloadSignature(shortPayloads),
+    /384 raw bytes/,
+  );
 });
 
 test("neutral uses 64 unique snapshots and rejects duplicates", () => {
