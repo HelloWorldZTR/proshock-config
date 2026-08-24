@@ -41,21 +41,6 @@ test("analog calibration modes and progress are available in Chinese", () => {
     translate("2/4 returns recorded · 7/16 center samples", "zh-CN"),
     "已记录 2/4 次回中 · 中心样本 7/16",
   );
-  assert.notEqual(
-    translate(
-      "Calibration captures raw ADC before any Profile shape. Firmware applies the saved physical correction first, then reapplies the selected circle, rounded-square, square, octagon, or custom shape.",
-      "zh-CN",
-    ),
-    "Calibration captures raw ADC before any Profile shape. Firmware applies the saved physical correction first, then reapplies the selected circle, rounded-square, square, octagon, or custom shape.",
-  );
-  assert.equal(
-    translate("Calibration requires exactly 4 Profiles.", "zh-CN"),
-    "校准必须读取完整的 4 个槽位。",
-  );
-  assert.equal(
-    translate("Profile 2 must contain 384 raw bytes.", "zh-CN"),
-    "槽位 2 必须包含完整的 384 个原始字节。",
-  );
 });
 
 test("Configurator Apply action and states are available in Chinese", () => {

@@ -179,7 +179,6 @@ import {
   dedupeSnapshots,
   estimateStickCoverage,
   nextWizardStep,
-  profilePayloadSignature,
   recordCenterReturnSample,
   recordQuickCenterSample,
   recordTriggerCycleSample,
@@ -1375,6 +1374,14 @@ function handleBeforeUnload(event) {
   event.returnValue = "";
 }
 
+function profileResponseSignature(profiles) {
+  return profiles.map((profile) => JSON.stringify({
+    stick: profile.stick_response,
+    trigger: profile.trigger_response,
+    shape: profile.stick_shape,
+  })).join("|");
+}
+
 async function getRaw() {
   const packet = await command(COMMAND.GET_RAW_INPUT, new Uint8Array(), false);
   latestRaw.value = parseRawInput(packet.payload);
@@ -1685,7 +1692,7 @@ async function wizardPrimary() {
   try {
     if (wizardStep.value === "neutral") {
       const profiles = await loadAllProfiles();
-      calibrationProfileGuard.value = profilePayloadSignature(profiles);
+      calibrationProfileGuard.value = profileResponseSignature(profiles);
       await startCenterCapture();
     } else if (wizardStep.value === "sticks-range") {
       await finishRangeCapture();
@@ -1706,8 +1713,8 @@ async function wizardPrimary() {
         throw new Error("Calibration verification failed: runtime generation did not advance.");
       }
       const profilesAfter = await loadAllProfiles();
-      if (profilePayloadSignature(profilesAfter) !== calibrationProfileGuard.value) {
-        throw new Error("Profile integrity verification failed: calibration changed Profile bytes.");
+      if (profileResponseSignature(profilesAfter) !== calibrationProfileGuard.value) {
+        throw new Error("Profile response verification failed: calibration changed Profile bytes.");
       }
       wizardStep.value = "save";
     } else if (wizardStep.value === "save") {

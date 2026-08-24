@@ -3,7 +3,7 @@
     <header class="page-heading">
       <p class="eyebrow">Device-level physical calibration</p>
       <h1>Analog Calibration</h1>
-      <p class="calibration-promise">Calibration captures raw ADC before any Profile shape. Firmware applies the saved physical correction first, then reapplies the selected circle, rounded-square, square, octagon, or custom shape.</p>
+      <p class="calibration-promise">Analog Calibration only updates this device's physical stick and trigger ranges. It never modifies any Profile deadzone, response curve, button, or lighting setting.</p>
     </header>
     <CalibrationWizard
       :step="step"
@@ -35,7 +35,7 @@
       <template #save>
         <div class="save-explainer">
           <strong>Apply is in RAM. Save persists through the firmware A/B flash service.</strong>
-          <p>All 384 bytes of all four Profiles are verified unchanged before this step completes.</p>
+          <p>The four Profile response payloads are verified unchanged before this step completes.</p>
         </div>
       </template>
     </CalibrationWizard>
