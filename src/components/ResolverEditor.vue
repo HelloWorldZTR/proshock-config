@@ -307,6 +307,7 @@
         <div><h2>Macros</h2><p>Choose a slot to record controller input. Existing slots can be recorded again.</p></div>
         <span class="capacity-chip">{{ stepCount }} / 10 steps</span>
       </header>
+      <CompetitiveRiskWarning />
       <div class="macro-slot-grid">
         <button
           v-for="index in 4"
@@ -470,6 +471,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import CompetitiveRiskWarning from "./CompetitiveRiskWarning.vue";
 import MacroOutputIcons from "./MacroOutputIcons.vue";
 import MappingControllerArtwork from "./MappingControllerArtwork.vue";
 import {

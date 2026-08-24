@@ -5,6 +5,8 @@
       <p>Shape calibrated stick motion before roundness, deadzone, and response curves.</p>
     </header>
 
+    <CompetitiveRiskWarning />
+
     <div class="editor-split rc-editor-split">
       <div class="rc-editor-stack">
         <article
@@ -152,6 +154,7 @@ import {
   cutoffHzToAlphaQ15,
   stickRcFrequencySeries,
 } from "../rc-filter.js";
+import CompetitiveRiskWarning from "./CompetitiveRiskWarning.vue";
 import InputViewer from "./InputViewer.vue";
 import RcFrequencyControl from "./RcFrequencyControl.vue";
 import { currentLocale, translate } from "../i18n.js";

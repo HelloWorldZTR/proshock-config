@@ -3,6 +3,8 @@ import { registerLocale } from "../i18n.js";
 registerLocale("zh-CN", "中文", {
   "ProShock 4 WebHID Config": "ProShock 4 WebHID 配置工具",
   "WebHID requires HTTPS or localhost.": "WebHID 需要 HTTPS 或 localhost 环境。",
+  "Online-play ban risk": "在线游戏封号风险",
+  "Macros and RC filtering may violate game or tournament rules. Use them at your own risk; account bans are your responsibility.": "宏功能和 RC 滤波可能违反游戏或赛事规则；使用后导致封号，后果自负。",
   "Language": "语言",
   "Home": "首页",
   "Configurator": "配置",

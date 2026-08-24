@@ -9,6 +9,17 @@ test("English remains the canonical fallback and Chinese is registered", () => {
   assert.deepEqual(availableLocales().map((item) => item.code), ["en", "zh-CN"]);
 });
 
+test("competitive-play risk warning is available in Chinese", () => {
+  assert.equal(translate("Online-play ban risk", "zh-CN"), "在线游戏封号风险");
+  assert.equal(
+    translate(
+      "Macros and RC filtering may violate game or tournament rules. Use them at your own risk; account bans are your responsibility.",
+      "zh-CN",
+    ),
+    "宏功能和 RC 滤波可能违反游戏或赛事规则；使用后导致封号，后果自负。",
+  );
+});
+
 test("source-message placeholders preserve runtime values", () => {
   assert.equal(translate("Slot 4", "zh-CN"), "槽位 4");
   assert.equal(
