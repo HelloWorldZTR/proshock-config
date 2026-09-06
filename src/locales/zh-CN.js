@@ -643,4 +643,9 @@ registerLocale("zh-CN", "中文", {
   "Step {step}: Enter a duration from 4 to 1020 ms.": "步骤 {step}：请输入 4–1020 毫秒的时长。",
   "Step durations use 4 ms increments (4–1020 ms). Other values are rounded to the nearest increment.": "步骤时长以 4 毫秒为单位（4–1020 毫秒），其他值会四舍五入到最近的单位。",
   "Next recording starts": "下次录制起点",
+  "Connect a controller to record. Manual editing remains available offline.": "连接手柄后才能录制，离线仍可手工编辑。",
+  "Recording stopped at the shared step limit. The sequence was truncated.": "录制已达到共享步骤上限并停止，超出容量的部分已截断。",
+  "Controller disconnected. Recording stopped; captured steps were preserved.": "手柄已断开，录制已停止，已捕获的步骤已保留。",
+  "Recording uses live snapshots about every 50 ms and may miss short presses. The 4 ms step size is storage precision.": "录制使用约每 50 毫秒一次的实时快照，可能漏掉短促按键；4 毫秒步长表示存储精度。",
+  "Macro {macro} cannot hold forever in Once mode.": "宏 {macro} 在一次模式下不能保持最后一步。",
 });

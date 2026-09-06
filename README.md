@@ -81,3 +81,22 @@ npm run build
 
 界面使用的 DualShock 图形资源及其授权信息见
 [`src/assets/dualshock-tools-LICENSE.txt`](src/assets/dualshock-tools-LICENSE.txt)。
+
+## 宏录制与编辑
+
+在 Configurator → Buttons → Macros 选择槽位。已有宏直接进入编辑；离线也可以
+添加按键/暂停、复制、插入或上下移动步骤。四个槽位共享十步容量，每步为
+4–1020ms，按 4ms 量化；非整步输入显示实际存储时长，空值或越界阻止完成编辑。
+编辑器显示步骤总时长，重新录制期间显示录制计时。
+
+Trigger mode、Loop sequence 和 Hold last step 分别设置触发与结束行为。
+While held 松开触发键即停止；Toggle 再次按键可关闭尚在播放的序列；循环需单独开启。
+Once 不允许 Hold last step。Loop 与 Hold last 同时启用时，固件优先循环。
+仅修改步骤时长或输出不会改变其他播放参数。暂停步骤释放该宏的输出，不会屏蔽其他输入。
+
+实时录制需要已连接的手柄；断连保留已捕获步骤并停止录制，容量耗尽自动停止并提示截断。
+First input 排除首次按键之前的空闲等待，仅影响下一次录制。
+当前录制读取约 50ms 一次的预览快照，可能漏掉短促输入；4ms 是存储精度，不能当作录制精度。
+
+Complete editing 只更新当前 Profile 草稿；Apply 写入设备 RAM，Save 才持久化。
+Cancel / Escape 关闭对话框并丢弃本次弹窗修改。清除槽位会将后续宏前移并修正映射引用。

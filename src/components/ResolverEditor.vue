@@ -407,6 +407,7 @@
                     type="button"
                     class="macro-step-edit"
                     :class="{ active: editingStepIndex === stepIndex }"
+                    :aria-expanded="editingStepIndex === stepIndex"
                     :disabled="isRecording"
                     @click="toggleRecordedStepEditor(stepIndex)"
                   >{{ editingStepIndex === stepIndex ? "Done" : "Edit" }}</button>
@@ -436,6 +437,7 @@
                         :key="outputId"
                         type="button"
                         :class="{ active: step.output_mask & (1 << (outputId - 1)) }"
+                        :aria-pressed="!!(step.output_mask & (1 << (outputId - 1)))"
                         :aria-label="`Toggle ${SOURCE_NAMES[outputId - 1]}`"
                         :title="SOURCE_NAMES[outputId - 1]"
                         data-i18n-ignore
@@ -455,6 +457,9 @@
               <button type="button" :disabled="isRecording || recordedSteps.length >= recorderStepLimit" @click="addRecordedStep(recordedSteps.length)">Add pause</button>
               <small>Remaining steps: {{ recorderStepLimit - recordedSteps.length }}</small>
             </div>
+            <p v-if="!connected" class="support-note">Connect a controller to record. Manual editing remains available offline.</p>
+            <p v-if="recordingNotice" class="macro-recording-notice" role="status">{{ recordingNotice }}</p>
+            <p class="support-note">Recording uses live snapshots about every 50 ms and may miss short presses. The 4 ms step size is storage precision.</p>
             <p class="support-note">Step durations use 4 ms increments (4–1020 ms). Other values are rounded to the nearest increment.</p>
             <div class="macro-option-mode">
               <span>Next recording starts</span>
@@ -467,7 +472,7 @@
             <div class="macro-option-mode">
               <span>Trigger mode</span>
               <div>
-                <button v-for="mode in MACRO_MODES" :key="mode.id" type="button" :class="{ active: recorderMode === mode.id }" @click="setRecorderMode(mode.id)">{{ mode.label }}</button>
+                <button v-for="mode in MACRO_MODES" :key="mode.id" type="button" :class="{ active: recorderMode === mode.id }" :aria-pressed="recorderMode === mode.id" @click="setRecorderMode(mode.id)">{{ mode.label }}</button>
               </div>
             </div>
             <div class="macro-playback-options">
@@ -482,7 +487,7 @@
           <footer>
             <button v-if="recorderExisting && !isRecording" type="button" class="text-button danger-text" @click="clearRecordedMacro">Clear slot</button>
             <button type="button" @click="closeMacroRecorder">Cancel</button>
-            <button v-if="!isRecording" type="button" class="record-button" @click="startMacroRecording"><i></i>{{ recorderDirty ? "Record again" : "Record" }}</button>
+            <button v-if="!isRecording" type="button" class="record-button" :disabled="!connected || recorderStepLimit <= 0" @click="startMacroRecording"><i></i>{{ recorderDirty ? "Record again" : "Record" }}</button>
             <button v-else type="button" class="stop-recording-button" @click="stopMacroRecording">Stop</button>
             <button type="button" class="primary" :disabled="isRecording || !recorderDirty || !recordedSteps.length" @click="saveMacroRecording">Complete editing</button>
           </footer>
@@ -494,6 +499,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { advanceMacroCapture, createMacroCapture } from "../macro-capture.js";
 import { cloneMacroDraft, insertMacroStep, moveMacroStep, parseStepDuration, removeMacroSlot, resolveMacroSteps } from "../macro-editor.js";
 import CompetitiveRiskWarning from "./CompetitiveRiskWarning.vue";
 import MacroOutputIcons from "./MacroOutputIcons.vue";
@@ -558,8 +564,8 @@ const recordingWaitingForInput = ref(false);
 const editingStepIndex = ref(null);
 const recordingElapsedMs = ref(0);
 let recordingTimer = null;
-let recordingStartedAt = 0;
-let recordingSegmentStartedAt = 0;
+let macroCapture = null;
+const recordingNotice = ref("");
 let comboCaptureTimer = null;
 let comboCaptureTracker = null;
 const systemCombos = [
@@ -568,7 +574,7 @@ const systemCombos = [
   { direction: "↓", profile: 3 },
   { direction: "←", profile: 4 },
 ];
-let recordingSegmentMask = 0;
+
 const resolver = computed(() => props.resolver || createDefaultResolver());
 const layerChoices = [
   { id: 0, label: "Base" }, { id: 1, label: "Layer 1" }, { id: 2, label: "Layer 2" },
@@ -723,26 +729,17 @@ const comboCaptureDetail = computed(() => {
 });
 
 watch(liveOutputMask, (mask) => {
-  if (!isRecording.value) return;
-  const now = performance.now();
-  if (recordingWaitingForInput.value) {
-    if (mask === 0) return;
-    beginRecordingTimeline(mask, now);
-    return;
-  }
-  if (mask === recordingSegmentMask) return;
-  if (!appendRecordedSegment(recordingSegmentMask, now - recordingSegmentStartedAt)) {
-    stopMacroRecording(false);
-    return;
-  }
-  recordingSegmentMask = mask;
-  recordingSegmentStartedAt = now;
+  if (isRecording.value) updateMacroCapture(mask);
 });
 
 watch(comboDrawerOpen, (open) => {
   if (!open) resetComboCapture();
 });
 watch(() => props.connected, (connected) => {
+  if (!connected && isRecording.value) {
+    stopMacroRecording();
+    recordingNotice.value = "Controller disconnected. Recording stopped; captured steps were preserved.";
+  }
   if (!connected && comboCaptureActive.value) {
     clearComboCaptureTimer();
     comboCaptureState.value = "error";
@@ -1026,6 +1023,7 @@ async function openMacroRecorder(index) {
   recorderSource = cloneMacroDraft(existing);
   recorderReturnFocus = document.activeElement;
   recorderError.value = "";
+  recordingNotice.value = "";
   recorderLoop.value = recorderSource.loop;
   recorderHoldLast.value = recorderSource.hold_last;
   macroRecorderSlot.value = index;
@@ -1038,64 +1036,45 @@ async function openMacroRecorder(index) {
   await nextTick();
   macroDialog.value?.showModal();
 }
+/** @brief Release the capture timer on stop, close, or component teardown. */
 function clearRecordingTimer() {
   if (recordingTimer !== null) window.clearInterval(recordingTimer);
   recordingTimer = null;
 }
-function appendRecordedSegment(mask, durationMs) {
-  let remaining = Math.max(1, Math.round(durationMs / 4));
-  while (remaining > 0) {
-    const last = recordedSteps.value.at(-1);
-    if (last?.output_mask === mask && last.duration_4ms < 255) {
-      const addition = Math.min(remaining, 255 - last.duration_4ms);
-      last.duration_4ms += addition;
-      remaining -= addition;
-      continue;
-    }
-    if (recordedSteps.value.length >= recorderStepLimit.value) return false;
-    const duration_4ms = Math.min(remaining, 255);
-    recordedSteps.value.push({ output_mask: mask, duration_4ms });
-    remaining -= duration_4ms;
-  }
-  return true;
+/** @brief Publish a small capture snapshot to the editor and retire finished timers. */
+function updateMacroCapture(mask = liveOutputMask.value, stop = false) {
+  if (!macroCapture) return;
+  advanceMacroCapture(macroCapture, mask, performance.now(), { stop });
+  recordedSteps.value = macroCapture.steps.map((step) => ({ ...step }));
+  isRecording.value = macroCapture.active;
+  recordingWaitingForInput.value = macroCapture.waiting;
+  recordingElapsedMs.value = macroCapture.elapsedMs;
+  recordingNotice.value = macroCapture.notice;
+  if (!isRecording.value) clearRecordingTimer();
 }
-function beginRecordingTimeline(mask, now = performance.now()) {
-  recordingWaitingForInput.value = false;
-  recordingStartedAt = now;
-  recordingSegmentStartedAt = now;
-  recordingSegmentMask = mask;
-  clearRecordingTimer();
-  recordingTimer = window.setInterval(() => {
-    recordingElapsedMs.value = performance.now() - recordingStartedAt;
-  }, 20);
-}
+/** @brief Replace the local sequence with a fresh connected-controller capture. */
 function startMacroRecording() {
+  if (!props.connected || isRecording.value || recorderStepLimit.value <= 0) return;
+  clearRecordingTimer();
   recordedSteps.value = [];
   editingStepIndex.value = null;
   recorderDirty.value = true;
-  isRecording.value = true;
+  recorderError.value = "";
+  recordingNotice.value = "";
+  macroCapture = createMacroCapture({
+    limit: recorderStepLimit.value,
+    startMode: recorderStartMode.value,
+    mask: liveOutputMask.value,
+    now: performance.now(),
+  });
+  isRecording.value = macroCapture.active;
+  recordingWaitingForInput.value = macroCapture.waiting;
   recordingElapsedMs.value = 0;
-  clearRecordingTimer();
-  if (recorderStartMode.value === "first-input" && liveOutputMask.value === 0) {
-    recordingWaitingForInput.value = true;
-    recordingSegmentMask = 0;
-    return;
-  }
-  beginRecordingTimeline(liveOutputMask.value);
+  recordingTimer = window.setInterval(() => updateMacroCapture(), 20);
 }
-function stopMacroRecording(captureCurrent = true) {
-  if (!isRecording.value) return;
-  if (recordingWaitingForInput.value) {
-    recordingWaitingForInput.value = false;
-    isRecording.value = false;
-    recordingElapsedMs.value = 0;
-    clearRecordingTimer();
-    return;
-  }
-  const now = performance.now();
-  if (captureCurrent) appendRecordedSegment(recordingSegmentMask, now - recordingSegmentStartedAt);
-  recordingElapsedMs.value = now - recordingStartedAt;
-  isRecording.value = false;
+/** @brief Finish the pending input segment, including capacity and armed-state handling. */
+function stopMacroRecording() {
+  if (isRecording.value) updateMacroCapture(macroCapture.mask, true);
   clearRecordingTimer();
 }
 /** @brief Discard the local draft and return focus to its launcher. */
@@ -1105,16 +1084,19 @@ function closeMacroRecorder() {
   const returnFocus = recorderReturnFocus;
   nextTick(() => { if (returnFocus?.isConnected) returnFocus.focus(); });
   macroRecorderSlot.value = null;
+  macroCapture = null;
   recordedSteps.value = [];
   recordingWaitingForInput.value = false;
   editingStepIndex.value = null;
   recorderDirty.value = false;
 }
+/** @brief Change only the trigger mode; leave end behavior for explicit editing. */
 function setRecorderMode(mode) {
   if (recorderMode.value === mode) return;
   recorderMode.value = mode;
   recorderDirty.value = true;
 }
+/** @brief Expand or collapse a single step output editor. */
 function toggleRecordedStepEditor(stepIndex) {
   editingStepIndex.value = editingStepIndex.value === stepIndex ? null : stepIndex;
 }
@@ -1142,6 +1124,7 @@ function moveRecordedStep(index, direction) {
   editingStepIndex.value = moveMacroStep(recordedSteps.value, index, index + direction, editingStepIndex.value);
   recorderDirty.value = true;
 }
+/** @brief Toggle an output while keeping opposite D-pad directions exclusive. */
 function toggleRecordedStepOutput(stepIndex, outputId) {
   const step = recordedSteps.value[stepIndex];
   const outputBit = 1 << outputId;
@@ -1155,10 +1138,12 @@ function toggleRecordedStepOutput(stepIndex, outputId) {
   step.output_mask = nextMask >>> 0;
   recorderDirty.value = true;
 }
+/** @brief Turn one step into a release without changing its duration. */
 function setRecordedStepPause(stepIndex) {
   recordedSteps.value[stepIndex].output_mask = 0;
   recorderDirty.value = true;
 }
+/** @brief Delete a step and keep the remaining editor selection aligned. */
 function removeRecordedStep(stepIndex) {
   recordedSteps.value.splice(stepIndex, 1);
   if (editingStepIndex.value === stepIndex) editingStepIndex.value = null;
@@ -1186,11 +1171,13 @@ function saveMacroRecording() {
   emit("update", next);
   closeMacroRecorder();
 }
+/** @brief Remove the stored draft slot and return to the macro manager. */
 function clearRecordedMacro() {
   if (macroRecorderSlot.value === null) return;
   deleteMacro(macroRecorderSlot.value);
   closeMacroRecorder();
 }
+/** @brief Display exact millisecond precision for the macro timeline. */
 function formatDuration(milliseconds) {
   return `${(milliseconds / 1000).toFixed(3)} s`;
 }

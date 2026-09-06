@@ -78,3 +78,11 @@ test("Host validator allows held Combo Actions and rejects ambiguous chords", ()
   }];
   assert.match(validateResolver(resolver)[0], /system shortcut/i);
 });
+
+test("Macro duration validation rejects negative, fractional and nonnumeric imported ticks", () => {
+  for (const duration_4ms of [-1, 0, 1.5, 256, NaN, "25"]) {
+    const resolver = createDefaultResolver();
+    resolver.macros.push({ mode: 0, loop: false, hold_last: false, steps: [{ output_mask: 0, duration_4ms }] });
+    assert.match(validateResolver(resolver)[0], /4–1020/);
+  }
+});

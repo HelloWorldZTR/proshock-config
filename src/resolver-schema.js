@@ -254,7 +254,7 @@ export function validateResolver(resolver) {
     if (macro.mode_flags_raw != null && (macro.mode_flags_raw & 0x80) === 0) errors.push(`Macro ${macroIndex + 1} is missing its enabled flag.`);
     macro.steps.forEach((step, stepIndex) => {
       const mask = step.output_mask >>> 0;
-      if (!step.duration_4ms || step.duration_4ms > 255) errors.push(`Macro ${macroIndex + 1}, step ${stepIndex + 1} needs 4–1020 ms.`);
+      if (!Number.isInteger(step.duration_4ms) || step.duration_4ms < 1 || step.duration_4ms > 255) errors.push(`Macro ${macroIndex + 1}, step ${stepIndex + 1} needs 4–1020 ms.`);
       if ((mask & ~0x3ffff) !== 0 || ((mask & (1 << 14)) && (mask & (1 << 16))) || ((mask & (1 << 15)) && (mask & (1 << 17)))) {
         errors.push(`Macro ${macroIndex + 1}, step ${stepIndex + 1} has an invalid output chord.`);
       }

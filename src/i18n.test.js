@@ -124,3 +124,11 @@ test("right-corner notifications are available in Chinese", () => {
     assert.notEqual(translate(message, "zh-CN"), message, message);
   });
 });
+
+test("macro editing and recording feedback are localized without translating controller labels", () => {
+  assert.equal(translate("Complete editing", "zh-CN"), "完成编辑");
+  assert.equal(translate("Remaining steps: 3", "zh-CN"), "剩余步骤：3");
+  assert.equal(translate("Stored duration: 8 ms", "zh-CN"), "实际存储时长：8 毫秒");
+  assert.equal(translate("Step 2: Enter a duration from 4 to 1020 ms.", "zh-CN"), "步骤 2：请输入 4–1020 毫秒的时长。");
+  assert.equal(translate("Controller disconnected. Recording stopped; captured steps were preserved.", "zh-CN"), "手柄已断开，录制已停止，已捕获的步骤已保留。");
+});
