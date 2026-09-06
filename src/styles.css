@@ -610,6 +610,13 @@ label { display: grid; gap: 8px; color: var(--secondary); font-size: 13px; }
 .macro-step-output-picker > button.active { border-color: rgba(85,214,255,.42); background: rgba(85,214,255,.08); color: var(--accent); }
 .macro-step-output-picker .macro-output-icons.compact .macro-output-icon { width: 25px; height: 25px; }
 .macro-step-output-picker > button > span { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.macro-step-tools { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.macro-step-tools button { min-height: 30px; padding: 3px 8px; font-size: 10px; }
+.macro-step-note { grid-column: 1 / -1; margin: 0; font-size: 11px; }
+.macro-step-note.error { color: var(--danger); }
+.macro-add-steps { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.macro-add-steps button { font-size: 11px; }
+.macro-add-steps small { color: var(--muted); }
 .macro-option-mode { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 14px; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border); }
 .macro-option-mode > span { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 .macro-option-mode > div { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; border: 1px solid var(--border); }
@@ -941,6 +948,7 @@ input[type=range] { width: 100%; padding: 0; accent-color: var(--accent); }
   .macro-recorder-body { padding: 14px; }
   .macro-live-input, .macro-option-mode { grid-template-columns: 1fr; }
   .macro-live-input > span { grid-row: auto; }
+  .macro-recording-step { grid-template-columns: 20px minmax(0, 1fr) 74px 40px 28px; gap: 4px; padding-inline: 4px; }
   .macro-step-output-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .macro-recorder-modal > footer { justify-content: stretch; }
   .macro-recorder-modal > footer button { flex: 1 1 auto; }

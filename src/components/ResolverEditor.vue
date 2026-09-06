@@ -304,7 +304,7 @@
           <div class="manager-drawer-body">
     <div v-if="openManager === 'macros'" class="resolver-tool-page">
       <header class="tool-page-heading">
-        <div><h2>Macros</h2><p>Choose a slot to record controller input. Existing slots can be recorded again.</p></div>
+        <div><h2>Macros</h2><p>Choose a slot to edit a macro, build steps manually, or record controller input.</p></div>
         <span class="capacity-chip">{{ stepCount }} / 10 steps</span>
       </header>
       <CompetitiveRiskWarning />
@@ -320,8 +320,8 @@
         >
           <span class="macro-slot-heading">
             <b>Macro {{ index }}</b>
-            <small v-if="resolver.macros[index - 1]">Record again</small>
-            <small v-else-if="index - 1 === resolver.macros.length">Record</small>
+            <small v-if="resolver.macros[index - 1]">Edit</small>
+            <small v-else-if="index - 1 === resolver.macros.length">Create macro</small>
             <small v-else>Locked</small>
           </span>
           <span v-if="resolver.macros[index - 1]" class="macro-slot-preview">
@@ -361,14 +361,14 @@
       <Teleport to="body">
         <dialog v-if="macroRecorderSlot !== null" ref="macroDialog" class="macro-recorder-modal" aria-label="Edit macro" @cancel.prevent="closeMacroRecorder">
           <header>
-            <div><span>{{ recorderExisting ? "Record again" : "New recording" }}</span><strong>Macro {{ macroRecorderSlot + 1 }}</strong></div>
+            <div><span>{{ recorderExisting ? "Edit macro" : "New macro" }}</span><strong>Macro {{ macroRecorderSlot + 1 }}</strong></div>
             <button type="button" aria-label="Close macro recorder" @click="closeMacroRecorder">×</button>
           </header>
           <div class="macro-recorder-body">
             <div class="macro-recorder-status" :class="{ recording: isRecording, waiting: recordingWaitingForInput }">
               <i></i>
               <span>{{ recorderStatusLabel }}</span>
-              <b>{{ formatDuration(recordingElapsedMs) }}</b>
+              <b>{{ isRecording ? formatDuration(recordingElapsedMs) : (resolvedSteps.error ? "—" : formatDuration(resolvedSteps.totalMs)) }}</b>
             </div>
 
             <div class="macro-live-input">
@@ -378,8 +378,8 @@
             </div>
 
             <div class="macro-recorded-preview">
-              <header><span>Captured sequence</span><small>{{ recordedSteps.length }} / {{ recorderStepLimit }} steps</small></header>
-              <div v-if="!recordedSteps.length" class="macro-recording-empty">Press Record, then use the controller buttons you want to capture.</div>
+              <header><span>Macro sequence</span><small>{{ recordedSteps.length }} / {{ recorderStepLimit }} steps</small></header>
+              <div v-if="!recordedSteps.length" class="macro-recording-empty">Add a step to build a macro, or connect a controller to record input.</div>
               <div v-else class="macro-recording-steps">
                 <div
                   v-for="(step, stepIndex) in recordedSteps"
@@ -395,10 +395,11 @@
                       min="4"
                       max="1020"
                       step="4"
-                      :value="step.duration_4ms * 4"
+                      :value="step.duration_input ?? step.duration_4ms * 4"
+                      :aria-invalid="!!stepDuration(step).error"
                       :disabled="isRecording"
                       aria-label="Step duration in milliseconds"
-                      @change="updateRecordedStepDuration(stepIndex, $event)"
+                      @input="updateRecordedStepDuration(stepIndex, $event)"
                     >
                     <span>ms</span>
                   </label>
@@ -416,6 +417,14 @@
                     aria-label="Remove captured step"
                     @click="removeRecordedStep(stepIndex)"
                   >×</button>
+                  <div class="macro-step-tools">
+                    <button type="button" :disabled="isRecording || stepIndex === 0" aria-label="Move step up" @click="moveRecordedStep(stepIndex, -1)">↑</button>
+                    <button type="button" :disabled="isRecording || stepIndex === recordedSteps.length - 1" aria-label="Move step down" @click="moveRecordedStep(stepIndex, 1)">↓</button>
+                    <button type="button" :disabled="isRecording || recordedSteps.length >= recorderStepLimit" @click="addRecordedStep(stepIndex + 1, step)">Duplicate step</button>
+                    <button type="button" :disabled="isRecording || recordedSteps.length >= recorderStepLimit" @click="addRecordedStep(stepIndex + 1)">Insert pause after</button>
+                  </div>
+                  <p v-if="stepDuration(step).error" class="macro-step-note error" role="alert">{{ stepDuration(step).error }}</p>
+                  <p v-else-if="Number(step.duration_input ?? step.duration_4ms * 4) !== stepDuration(step).milliseconds" class="macro-step-note">Stored duration: {{ stepDuration(step).milliseconds }} ms</p>
                   <div v-if="editingStepIndex === stepIndex" class="macro-step-editor">
                     <header>
                       <span>Step output</span>
@@ -441,8 +450,14 @@
               </div>
             </div>
 
+            <div class="macro-add-steps">
+              <button type="button" :disabled="isRecording || recordedSteps.length >= recorderStepLimit" @click="addRecordedStep(recordedSteps.length, { output_mask: 1, duration_4ms: 25 })">Add button step</button>
+              <button type="button" :disabled="isRecording || recordedSteps.length >= recorderStepLimit" @click="addRecordedStep(recordedSteps.length)">Add pause</button>
+              <small>Remaining steps: {{ recorderStepLimit - recordedSteps.length }}</small>
+            </div>
+            <p class="support-note">Step durations use 4 ms increments (4–1020 ms). Other values are rounded to the nearest increment.</p>
             <div class="macro-option-mode">
-              <span>Capture starts</span>
+              <span>Next recording starts</span>
               <div>
                 <button type="button" :class="{ active: recorderStartMode === 'record' }" :disabled="isRecording" @click="recorderStartMode = 'record'">On Record</button>
                 <button type="button" :class="{ active: recorderStartMode === 'first-input' }" :disabled="isRecording" @click="recorderStartMode = 'first-input'">First input</button>
@@ -479,7 +494,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { cloneMacroDraft } from "../macro-editor.js";
+import { cloneMacroDraft, insertMacroStep, moveMacroStep, parseStepDuration, removeMacroSlot, resolveMacroSteps } from "../macro-editor.js";
 import CompetitiveRiskWarning from "./CompetitiveRiskWarning.vue";
 import MacroOutputIcons from "./MacroOutputIcons.vue";
 import MappingControllerArtwork from "./MappingControllerArtwork.vue";
@@ -638,11 +653,11 @@ const liveOutputMask = computed(() => {
 const liveOutputLabel = computed(() => (
   SOURCE_NAMES.slice(0, 18).filter((_, index) => liveOutputMask.value & (1 << index)).join(" + ") || "No buttons pressed"
 ));
-const recorderHasInput = computed(() => recordedSteps.value.some((step) => step.output_mask));
+const resolvedSteps = computed(() => resolveMacroSteps(recordedSteps.value));
 const recorderStatusLabel = computed(() => {
   if (recordingWaitingForInput.value) return "Armed — waiting for first controller input";
   if (isRecording.value) return "Recording controller input";
-  return recorderDirty.value ? "Recording stopped — steps can be edited" : "Ready to record";
+  return recordedSteps.value.length ? "Editing macro steps" : "Ready to build or record";
 });
 const pressedSources = computed(() => {
   const pressed = new Set();
@@ -1001,18 +1016,9 @@ function toggleComboSource(index, sourceId) {
   });
 }
 function updateCombo(index, field, value) { commit((next) => { next.combos[index][field] = value; }); }
+/** @brief Remove a macro while maintaining all mapping references. */
 function deleteMacro(index) {
-  commit((next) => {
-    const removedAction = ACTION.MACRO_FIRST + index;
-    const remapAction = (action) => {
-      if (action === removedAction) return ACTION.NONE;
-      return action > removedAction && action < ACTION.MACRO_FIRST + 4 ? action - 1 : action;
-    };
-    next.base_mapping = next.base_mapping.map(remapAction);
-    next.layers.forEach((layer) => layer.overrides.forEach((entry) => { entry.action_id = remapAction(entry.action_id); }));
-    next.combos.forEach((combo) => { combo.action_id = remapAction(combo.action_id); });
-    next.macros.splice(index, 1);
-  });
+  commit((next) => removeMacroSlot(next, index));
 }
 /** @brief Open an isolated macro draft in a viewport-level modal. */
 async function openMacroRecorder(index) {
@@ -1112,11 +1118,28 @@ function setRecorderMode(mode) {
 function toggleRecordedStepEditor(stepIndex) {
   editingStepIndex.value = editingStepIndex.value === stepIndex ? null : stepIndex;
 }
+/** @brief Keep raw input until submission so blank and invalid edits remain visible. */
 function updateRecordedStepDuration(stepIndex, event) {
-  const durationMs = Number(event.target.value);
-  const duration4ms = Math.max(1, Math.min(255, Math.round(durationMs / 4) || 1));
-  recordedSteps.value[stepIndex].duration_4ms = duration4ms;
-  event.target.value = duration4ms * 4;
+  recordedSteps.value[stepIndex].duration_input = event.target.value;
+  recorderError.value = "";
+  recorderDirty.value = true;
+}
+/** @brief Return the stored duration or an actionable validation error. */
+function stepDuration(step) {
+  return parseStepDuration(step.duration_input ?? step.duration_4ms * 4);
+}
+/** @brief Insert a step, open its output editor, and reveal it after layout. */
+async function addRecordedStep(index, source) {
+  if (isRecording.value || !insertMacroStep(recordedSteps.value, index, recorderStepLimit.value, source)) return;
+  editingStepIndex.value = index;
+  recorderDirty.value = true;
+  await nextTick();
+  macroDialog.value?.querySelectorAll(".macro-recording-step")[index]?.scrollIntoView({ block: "nearest" });
+}
+/** @brief Reorder steps without changing timing, outputs, or editor selection. */
+function moveRecordedStep(index, direction) {
+  if (isRecording.value) return;
+  editingStepIndex.value = moveMacroStep(recordedSteps.value, index, index + direction, editingStepIndex.value);
   recorderDirty.value = true;
 }
 function toggleRecordedStepOutput(stepIndex, outputId) {
@@ -1145,13 +1168,15 @@ function removeRecordedStep(stepIndex) {
 /** @brief Validate and merge the macro draft without writing the device. */
 function saveMacroRecording() {
   if (isRecording.value || macroRecorderSlot.value === null || !recordedSteps.value.length) return;
+  recorderError.value = resolvedSteps.value.error;
+  if (recorderError.value) return;
   const index = macroRecorderSlot.value;
   const macro = cloneMacroDraft({
     ...recorderSource,
     mode: recorderMode.value,
     loop: recorderLoop.value,
     hold_last: recorderHoldLast.value,
-    steps: recordedSteps.value,
+    steps: resolvedSteps.value.steps,
   });
   const next = cloneResolver();
   if (index === next.macros.length) next.macros.push(macro);
@@ -1167,7 +1192,7 @@ function clearRecordedMacro() {
   closeMacroRecorder();
 }
 function formatDuration(milliseconds) {
-  return `${(milliseconds / 1000).toFixed(2)} s`;
+  return `${(milliseconds / 1000).toFixed(3)} s`;
 }
 function removeLayerEntry(layerIndex, sourceId) { commit((next) => { next.layers[layerIndex].overrides = next.layers[layerIndex].overrides.filter((entry) => entry.source_id !== sourceId); }); }
 </script>
