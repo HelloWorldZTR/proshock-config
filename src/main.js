@@ -6,4 +6,5 @@ import "./styles.css";
 
 initializeI18n();
 createApp(App).mount("#app");
-mountI18n(document.querySelector("#app"));
+// Include viewport-level dialogs teleported outside #app.
+mountI18n(document.body);

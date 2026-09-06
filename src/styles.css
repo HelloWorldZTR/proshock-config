@@ -563,14 +563,20 @@ label { display: grid; gap: 8px; color: var(--secondary); font-size: 13px; }
 .macro-output-icons.compact .macro-output-icon { width: 25px; height: 25px; padding: 2px; }
 .macro-pause { color: var(--muted); font: 9px ui-monospace, monospace; text-transform: uppercase; letter-spacing: .08em; }
 
-.macro-recorder-scrim { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; padding: 24px; background: rgba(2,5,8,.76); backdrop-filter: blur(7px); }
-.macro-recorder-modal { width: min(760px, 100%); max-height: 100%; min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; border: 1px solid rgba(85,214,255,.28); background: #0b1118; box-shadow: 0 30px 90px rgba(0,0,0,.62), 0 0 40px rgba(85,214,255,.06); }
+.macro-recorder-modal::backdrop { background: rgba(2,5,8,.76); backdrop-filter: blur(7px); }
+.macro-recorder-modal { position: fixed; inset: 0; margin: auto; padding: 0; width: min(760px, calc(100% - 48px)); height: min(820px, calc(100dvh - 48px)); max-width: none; max-height: none; min-width: 0; min-height: 0; overflow: hidden; color: var(--text); border: 1px solid rgba(85,214,255,.28); background: #0b1118; box-shadow: 0 30px 90px rgba(0,0,0,.62); }
+.macro-recorder-modal[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.macro-playback-options { display: grid; gap: 10px; margin-top: 16px; font-size: 12px; }
+.macro-playback-options label { display: flex; align-items: center; gap: 8px; }
+.macro-playback-options input { width: 16px; min-height: 16px; accent-color: var(--accent); }
+.macro-playback-options p { margin: 0; font-size: 11px; }
+.macro-playback-options [role="alert"] { color: var(--danger); }
 .macro-recorder-modal > header { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 14px 0 20px; border-bottom: 1px solid var(--border); }
 .macro-recorder-modal > header div { display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 10px; }
 .macro-recorder-modal > header span { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
 .macro-recorder-modal > header strong { color: var(--accent); font-size: 15px; }
 .macro-recorder-modal > header button { width: 32px; min-height: 32px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 19px; }
-.macro-recorder-body { min-height: 0; overflow-y: auto; padding: 18px 20px; }
+.macro-recorder-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 18px 20px; }
 .macro-recorder-status { display: grid; grid-template-columns: 8px 1fr auto; align-items: center; gap: 9px; padding-bottom: 14px; border-bottom: 1px solid var(--border); color: var(--secondary); font-size: 11px; }
 .macro-recorder-status i, .record-button i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
 .macro-recorder-status.recording i, .record-button i { background: var(--danger); box-shadow: 0 0 12px rgba(255,100,124,.75); }
@@ -584,7 +590,7 @@ label { display: grid; gap: 8px; color: var(--secondary); font-size: 13px; }
 .macro-recorded-preview > header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 9px; color: var(--secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
 .macro-recorded-preview > header small { color: var(--muted); font: 9px ui-monospace, monospace; }
 .macro-recording-empty { min-height: 120px; display: grid; place-items: center; padding: 18px; border: 1px dashed var(--border-strong); color: var(--muted); font-size: 11px; line-height: 1.5; text-align: center; }
-.macro-recording-steps { max-height: 270px; display: grid; align-content: start; gap: 6px; padding-right: 4px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.macro-recording-steps { display: grid; align-content: start; gap: 6px; }
 .macro-recording-step { min-height: 50px; display: grid; grid-template-columns: 24px minmax(0, 1fr) 84px 44px 28px; align-items: center; gap: 8px; padding: 7px 8px; border-left: 2px solid var(--accent); background: rgba(85,214,255,.035); }
 .macro-recording-step.editing { background: rgba(85,214,255,.065); }
 .macro-recording-step > b { color: var(--muted); font: 10px ui-monospace, monospace; }
@@ -931,8 +937,7 @@ input[type=range] { width: 100%; padding: 0; accent-color: var(--accent); }
   .combo-fields label select { width: 100%; min-width: 0; }
   .tool-page-heading { align-items: stretch; flex-direction: column; }
   .macro-slot-grid { grid-template-columns: 1fr; }
-  .macro-recorder-scrim { padding: 0; place-items: stretch; }
-  .macro-recorder-modal { width: 100%; height: 100%; max-height: none; border-inline: 0; }
+  .macro-recorder-modal { width: 100%; height: 100dvh; border-inline: 0; }
   .macro-recorder-body { padding: 14px; }
   .macro-live-input, .macro-option-mode { grid-template-columns: 1fr; }
   .macro-live-input > span { grid-row: auto; }

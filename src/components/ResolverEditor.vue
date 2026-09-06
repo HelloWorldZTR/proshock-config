@@ -358,8 +358,8 @@
         </aside>
       </div>
 
-      <div v-if="macroRecorderSlot !== null" class="macro-recorder-scrim">
-        <section class="macro-recorder-modal" role="dialog" aria-modal="true" :aria-label="`Record Macro ${macroRecorderSlot + 1}`">
+      <Teleport to="body">
+        <dialog v-if="macroRecorderSlot !== null" ref="macroDialog" class="macro-recorder-modal" aria-label="Edit macro" @cancel.prevent="closeMacroRecorder">
           <header>
             <div><span>{{ recorderExisting ? "Record again" : "New recording" }}</span><strong>Macro {{ macroRecorderSlot + 1 }}</strong></div>
             <button type="button" aria-label="Close macro recorder" @click="closeMacroRecorder">×</button>
@@ -450,27 +450,36 @@
             </div>
 
             <div class="macro-option-mode">
-              <span>Playback</span>
+              <span>Trigger mode</span>
               <div>
                 <button v-for="mode in MACRO_MODES" :key="mode.id" type="button" :class="{ active: recorderMode === mode.id }" @click="setRecorderMode(mode.id)">{{ mode.label }}</button>
               </div>
             </div>
+            <div class="macro-playback-options">
+              <label><input v-model="recorderLoop" type="checkbox" @change="recorderDirty = true"> <span>Loop sequence</span></label>
+              <label><input v-model="recorderHoldLast" type="checkbox" @change="recorderDirty = true"> <span>Hold last step</span></label>
+              <p v-if="recorderLoop && recorderHoldLast">Loop takes priority over holding the last step.</p>
+              <p v-if="recorderMode === 0 && recorderHoldLast" role="alert">Once mode cannot hold the last step. Turn off Hold last step or change the trigger mode.</p>
+            </div>
+            <p class="support-note">Complete editing updates this Profile draft. Apply sends it to RAM; Save persists it.</p>
+            <p v-if="recorderError" class="resolver-errors" role="alert">{{ recorderError }}</p>
           </div>
           <footer>
             <button v-if="recorderExisting && !isRecording" type="button" class="text-button danger-text" @click="clearRecordedMacro">Clear slot</button>
             <button type="button" @click="closeMacroRecorder">Cancel</button>
             <button v-if="!isRecording" type="button" class="record-button" @click="startMacroRecording"><i></i>{{ recorderDirty ? "Record again" : "Record" }}</button>
             <button v-else type="button" class="stop-recording-button" @click="stopMacroRecording">Stop</button>
-            <button type="button" class="primary" :disabled="isRecording || !recorderDirty || !recorderHasInput" @click="saveMacroRecording">Save recording</button>
+            <button type="button" class="primary" :disabled="isRecording || !recorderDirty || !recordedSteps.length" @click="saveMacroRecording">Complete editing</button>
           </footer>
-        </section>
-      </div>
+        </dialog>
+      </Teleport>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { cloneMacroDraft } from "../macro-editor.js";
 import CompetitiveRiskWarning from "./CompetitiveRiskWarning.vue";
 import MacroOutputIcons from "./MacroOutputIcons.vue";
 import MappingControllerArtwork from "./MappingControllerArtwork.vue";
@@ -523,6 +532,12 @@ const isRecording = ref(false);
 const recorderDirty = ref(false);
 const recordedSteps = ref([]);
 const recorderMode = ref(0);
+const recorderLoop = ref(false);
+const recorderHoldLast = ref(false);
+const recorderError = ref("");
+const macroDialog = ref(null);
+let recorderSource = null;
+let recorderReturnFocus = null;
 const recorderStartMode = ref("record");
 const recordingWaitingForInput = ref(false);
 const editingStepIndex = ref(null);
@@ -999,8 +1014,14 @@ function deleteMacro(index) {
     next.macros.splice(index, 1);
   });
 }
-function openMacroRecorder(index) {
+/** @brief Open an isolated macro draft in a viewport-level modal. */
+async function openMacroRecorder(index) {
   const existing = resolver.value.macros[index];
+  recorderSource = cloneMacroDraft(existing);
+  recorderReturnFocus = document.activeElement;
+  recorderError.value = "";
+  recorderLoop.value = recorderSource.loop;
+  recorderHoldLast.value = recorderSource.hold_last;
   macroRecorderSlot.value = index;
   recorderMode.value = existing?.mode ?? 0;
   recordedSteps.value = existing?.steps.map((step) => ({ ...step })) || [];
@@ -1008,6 +1029,8 @@ function openMacroRecorder(index) {
   editingStepIndex.value = null;
   recordingElapsedMs.value = 0;
   recorderDirty.value = false;
+  await nextTick();
+  macroDialog.value?.showModal();
 }
 function clearRecordingTimer() {
   if (recordingTimer !== null) window.clearInterval(recordingTimer);
@@ -1069,8 +1092,12 @@ function stopMacroRecording(captureCurrent = true) {
   isRecording.value = false;
   clearRecordingTimer();
 }
+/** @brief Discard the local draft and return focus to its launcher. */
 function closeMacroRecorder() {
   stopMacroRecording();
+  macroDialog.value?.close();
+  const returnFocus = recorderReturnFocus;
+  nextTick(() => { if (returnFocus?.isConnected) returnFocus.focus(); });
   macroRecorderSlot.value = null;
   recordedSteps.value = [];
   recordingWaitingForInput.value = false;
@@ -1115,19 +1142,23 @@ function removeRecordedStep(stepIndex) {
   else if (editingStepIndex.value > stepIndex) editingStepIndex.value--;
   recorderDirty.value = true;
 }
+/** @brief Validate and merge the macro draft without writing the device. */
 function saveMacroRecording() {
-  if (macroRecorderSlot.value === null || !recorderHasInput.value) return;
+  if (isRecording.value || macroRecorderSlot.value === null || !recordedSteps.value.length) return;
   const index = macroRecorderSlot.value;
-  const macro = {
+  const macro = cloneMacroDraft({
+    ...recorderSource,
     mode: recorderMode.value,
-    loop: recorderMode.value === 1,
-    hold_last: false,
-    steps: recordedSteps.value.map((step) => ({ ...step })),
-  };
-  commit((next) => {
-    if (index === next.macros.length) next.macros.push(macro);
-    else next.macros[index] = macro;
+    loop: recorderLoop.value,
+    hold_last: recorderHoldLast.value,
+    steps: recordedSteps.value,
   });
+  const next = cloneResolver();
+  if (index === next.macros.length) next.macros.push(macro);
+  else next.macros[index] = macro;
+  recorderError.value = validateResolver(next)[0] || "";
+  if (recorderError.value) return;
+  emit("update", next);
   closeMacroRecorder();
 }
 function clearRecordedMacro() {

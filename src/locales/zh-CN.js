@@ -616,4 +616,12 @@ registerLocale("zh-CN", "中文", {
   "Controller disconnected. Unsaved work was preserved.": "手柄已断开，未保存的更改已保留。",
   "Controller disconnected.": "手柄已断开。",
   "Calibration saved and verified by firmware.": "校准已保存并通过固件验证。",
+  "Edit macro": "编辑宏",
+  "Trigger mode": "触发方式",
+  "Loop sequence": "循环序列",
+  "Hold last step": "保持最后一步",
+  "Loop takes priority over holding the last step.": "同时启用时，循环优先于保持最后一步。",
+  "Once mode cannot hold the last step. Turn off Hold last step or change the trigger mode.": "一次模式不能保持最后一步，请关闭保持最后一步或更改触发方式。",
+  "Complete editing": "完成编辑",
+  "Complete editing updates this Profile draft. Apply sends it to RAM; Save persists it.": "完成编辑仅更新此配置槽位的草稿；应用写入设备内存，保存写入持久存储。",
 });
