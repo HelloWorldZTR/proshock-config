@@ -573,7 +573,7 @@ registerLocale("zh-CN", "中文", {
   "Its normal Mapping can be delayed by up to 100 ms while firmware waits for the chord. Other members may be held before pressing the Leader, which acts as the Combo activation key.": "固件等待组合键时，其普通映射最多会延迟 100 ms。其他成员可先按住，再按作为组合激活键的主键。",
   "Consume members": "消耗成员按键",
   "Exact chord only": "仅精确组合",
-  "Assign": "分配",
+  "Assign": "按键映射",
   "Action categories": "操作分类",
   "No macros recorded": "尚未录制宏",
   "Record macro": "录制宏",

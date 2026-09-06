@@ -96,3 +96,9 @@
 .rc-stage-switch input:checked + .rc-switch-track::after { transform: translateX(16px); background: var(--bg, #0a0f16); }
 .rc-stage-switch input:checked ~ span:last-child { color: var(--accent); }
 .rc-stage-switch input:focus-visible + .rc-switch-track { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* Content and Apply footer share one width boundary on every configuration page. */
+.configurator-content { width: 100%; min-width: 0; }
+.configurator-content[data-section="rc"], .configurator-content[data-section="advanced"] { max-width: 1280px; }
+.configurator-content[data-section="lighting"] { max-width: 980px; }
+.configurator-content > .rc-page-canvas, .configurator-content > .advanced-canvas, .configurator-content > .lighting-section { max-width: none; }

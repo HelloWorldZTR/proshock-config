@@ -8,6 +8,7 @@
     <div class="context-row">
       <span>Slot {{ selectedProfile + 1 }}</span><b>·</b><span>{{ stateLabel }}</span>
     </div>
+    <div class="configurator-content" :data-section="section">
     <div v-if="section === 'system' || section === 'general'" class="system-settings">
       <header class="page-heading"><h1>System</h1><p>Profile input timing and device startup settings.</p></header>
       <section class="system-group"><h2>Current Profile</h2>
@@ -119,6 +120,7 @@
       />
     </div>
     <SettingsApplyFooter :state="applyState" :state-label="stateLabel" @apply="$emit('apply')" />
+    </div>
   </div>
 </template>
 
