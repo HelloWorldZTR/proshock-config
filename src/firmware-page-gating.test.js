@@ -22,7 +22,7 @@ test("firmware tools render only after the IAP connection gate", () => {
 test("IAP entry offers software entry or device selection without waiting copy", () => {
   assert.match(
     pageSource,
-    /configConnected && !permissionRequired \? "Enter IAP" : "Select IAP device"/,
+    /configConnected && !permissionRequired \? "Restart to IAP" : "Connect IAP"/,
   );
   assert.doesNotMatch(pageSource, /Waiting for an IAP device/);
   assert.doesNotMatch(pageSource, /Older devices need WCH-Link/);

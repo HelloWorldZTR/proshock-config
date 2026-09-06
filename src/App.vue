@@ -1,5 +1,6 @@
 <template>
   <main class="app-shell">
+    <div :inert="connectionBlocked || undefined" :aria-hidden="connectionBlocked || undefined" :class="{ 'connection-covered': connectionBlocked }">
     <div v-if="showSecureNote" class="secure-warning">WebHID requires HTTPS or localhost.</div>
     <AppHeader
       :profiles="profileCards"
@@ -13,6 +14,13 @@
       :disconnecting="disconnecting"
       :current-page="iapMode ? 'firmware' : page"
       :state="headerState"
+      :show-apply="showSettingsApply"
+      :apply-state="configuratorApplyState"
+      :can-save="canSave && !calibrationOwnsHeaderActions"
+      :saving="saveInProgress"
+      :settings-label="stateLabel"
+      :allow-offline="developmentPreview"
+      @apply="applyDraft" @save="saveConfig"
       :iap-active="iapMode"
       @navigate="requestPageNavigation"
       @profile-select="requestProfileSwitch"
@@ -25,6 +33,9 @@
       @device-info="requestGo('diagnostics', 'device')"
       @factory-reset="requestGo('firmware')"
     />
+    <div v-if="developmentPreview && devGateDismissed && !connected && !iapGate.ready" class="dev-preview-banner">
+      <span>Development preview · No device connected</span><button type="button" @click="devGateDismissed = false">Restore connection overlay</button>
+    </div>
     <HomePage
       v-if="page === 'home' && !iapMode"
       :connected="connected" :busy="busy" :profile-switch-blocked="hasUnsaved"
@@ -43,15 +54,24 @@
       :apply-state="configuratorApplyState"
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
       @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event"
-      @calibration-bound="setCalibrationBound"
+      @debounce-validity="debounceValid = $event"
+      :can-test="connected && !hasDraft && !saveInProgress && !!analogSnapshot"
       @response="setResponse" @resolver="setResolver" @button-debounce="setButtonDebounce"
       @stick-shape="setStickShape" @stick-rc="setStickRc"
       @reset-curves="resetCurves" @copy-curve="copyCurve"
       @calibrate="requestGo('calibration')" @apply="applyDraft"
     />
+    <div v-else-if="page === 'calibration' && !iapMode" class="page calibration-workspace">
+      <nav class="subtabs" aria-label="Calibration sections">
+        <button type="button" :class="{ active: calibrationSection === 'automatic' }" :disabled="calibrationOwnsHeaderActions" @click="requestGo('calibration', 'automatic')">Automatic calibration</button>
+        <button type="button" :class="{ active: calibrationSection === 'manual' }" :disabled="calibrationOwnsHeaderActions" @click="requestGo('calibration', 'manual')">Manual settings</button>
+      </nav>
+      <div v-if="calibrationSection === 'manual'" class="page manual-bounds-page">
+        <ManualBoundsEditor :calibration="calibrationDraft || defaultCalibration" :errors="calibrationValidation.failures" :apply-state="configuratorApplyState" :state-label="stateLabel" @update="setCalibrationBound" @apply="applyDraft" />
+      </div>
     <QuickCalibrationPage
-      v-else-if="page === 'calibration' && !iapMode"
-      :step="wizardStep" :busy="busy" :error="wizardError" :neutral-result="neutralResult"
+      v-else
+      :step="wizardStep" :busy="busy" :offline="!connected" :error="wizardError" :neutral-result="neutralResult"
       :calibration-mode="calibrationMode"
       :center-capture-active="centerCaptureActive" :center-capture-status="centerCaptureStatus"
       :left-range="rangeCaptureActive ? { sectorCounts: rangePreview.leftSectorCounts } : leftRange"
@@ -62,12 +82,15 @@
       @mode="setCalibrationMode"
       @primary="wizardPrimary" @back="wizardBack" @cancel="cancelWizard"
     />
+    </div>
     <FirmwareUpgradePage
+      ref="firmwarePage"
       v-else-if="page === 'firmware' || iapMode"
       :config-client="client"
       :config-connected="connected"
       :configuration-dirty="hasUnsaved"
       @iap-session="handleIapSession"
+      @gate-state="iapGate = $event"
     />
     <DiagnosticsPage
       v-else
@@ -94,11 +117,16 @@
     />
     <input ref="profileFileInput" class="visually-hidden" type="file" accept=".json,.proshock-profile.json" @change="importProfileFile">
     <div v-if="toast" class="toast" role="status">{{ toast }}</div>
+    </div>
+    <ConnectionGate v-if="connectionBlocked" :firmware="page === 'firmware'" :busy="busy || iapGate.busy" :error="page === 'firmware' ? (hasUnsaved ? 'Return Home and reconnect to save or discard pending configuration before entering IAP.' : iapGate.error) : connectionError" :blocked="page === 'firmware' && hasUnsaved" :development="developmentPreview" :conflict="connectionConflict"
+      @connect="page === 'firmware' ? firmwarePage?.connect() : connectFlow()"
+      @home="returnHomeFromGate" @dismiss="devGateDismissed = true"
+      @export="downloadProfile" @reload="reloadConnectedDevice" />
   </main>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   HEADER_ACTION,
   LEAVE_GUARD_KIND,
@@ -106,9 +134,11 @@ import {
   deriveConfiguratorApplyState,
   deriveHeaderState,
   deriveLeaveGuardKind,
-  getPageEntryBlockReason,
   shouldGuardNavigation,
 } from "./app-shell-state.js";
+import { isConnectionBlocked } from "./connection-gate.js";
+import ConnectionGate from "./components/ConnectionGate.vue";
+import ManualBoundsEditor from "./components/ManualBoundsEditor.vue";
 import AppHeader from "./components/AppHeader.vue";
 import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
 import HomePage from "./pages/HomePage.vue";
@@ -192,6 +222,14 @@ const client = new WebHidClient();
 const scheduler = new CommandScheduler();
 const showSecureNote = !window.isSecureContext || location.protocol === "file:";
 const connected = ref(false);
+const developmentPreview = import.meta.env.MODE === "development";
+const devGateDismissed = ref(false);
+const connectionError = ref("");
+const connectionConflict = ref(false);
+const firmwarePage = ref(null);
+const iapGate = ref({ ready: false, busy: false, error: "" });
+const debounceValid = ref(true);
+let retainedDevice = null;
 const busy = ref(false);
 const saveInProgress = ref(false);
 const disconnecting = ref(false);
@@ -233,7 +271,8 @@ const triggerPressWindows = ref([]);
 const logs = ref([{ timestamp: new Date().toISOString(), severity: "info", detail: "Ready." }]);
 const allProfiles = ref([]);
 const page = ref("home");
-const configuratorSection = ref("general");
+const configuratorSection = ref("system");
+const calibrationSection = ref("automatic");
 const diagnosticsSection = ref("input");
 const toast = ref("");
 const profileFileInput = ref(null);
@@ -335,28 +374,28 @@ const calibrationChanged = computed(() => (
     : false
 ));
 const calibrationDraftCanApply = computed(() => (
-  calibrationChanged.value && page.value !== "calibration"
+  calibrationChanged.value && (page.value !== "calibration" || calibrationSection.value === "manual")
 ));
 const hasApplyDraft = computed(() => (
   profileChanged.value || globalChanged.value || calibrationDraftCanApply.value
 ));
 const hasDraft = computed(() => profileChanged.value || globalChanged.value || calibrationChanged.value);
-const applyValid = computed(() => responseValid.value && resolverValid.value && rcValid.value && calibrationValidation.value.pass);
+const applyValid = computed(() => debounceValid.value && responseValid.value && resolverValid.value && rcValid.value && calibrationValidation.value.pass);
 const canApply = computed(() => (
   connected.value
-  && !busy.value
+  && !busy.value && !saveInProgress.value && !calibrationOwnsHeaderActions.value
   && hasApplyDraft.value
   && applyValid.value
 ));
-const canSave = computed(() => connected.value && !busy.value && !!configInfo.value?.dirty && !hasDraft.value);
+const canSave = computed(() => connected.value && !busy.value && !saveInProgress.value && !!configInfo.value?.dirty && !hasDraft.value);
 const configuratorApplyState = computed(() => deriveConfiguratorApplyState({
   connected: connected.value,
-  busy: busy.value,
+  busy: busy.value || saveInProgress.value || calibrationOwnsHeaderActions.value,
   hasApplyDraft: hasApplyDraft.value,
   applyValid: applyValid.value,
 }));
 const calibrationWorkflowPending = computed(() => (
-  page.value === "calibration"
+  page.value === "calibration" && calibrationSection.value === "automatic"
   && [
     "sticks-range",
     "triggers-released",
@@ -365,7 +404,7 @@ const calibrationWorkflowPending = computed(() => (
   ].includes(wizardStep.value)
 ));
 const calibrationOwnsHeaderActions = computed(() => (
-  page.value === "calibration"
+  calibrationSection.value === "automatic"
   && (
     centerCaptureActive.value
     || !["neutral", "complete"].includes(wizardStep.value)
@@ -394,6 +433,19 @@ const headerState = computed(() => deriveHeaderState({
   calibrationOwnsActions: calibrationOwnsHeaderActions.value,
   hasUnsaved: hasUnsaved.value,
 }));
+const showSettingsApply = computed(() => !iapMode.value && (page.value === "configurator" || (page.value === "calibration" && calibrationSection.value === "manual")));
+const connectionBlocked = computed(() => isConnectionBlocked({
+  page: page.value, connected: connected.value, iapReady: iapGate.value.ready,
+  development: developmentPreview, dismissed: devGateDismissed.value,
+}));
+/** Exit the gate without leaving an unowned IAP session running. */
+function returnHomeFromGate() {
+  iapMode.value = false;
+  iapGate.value = { ready: false, busy: false, error: "" };
+  performGo("home");
+}
+watch(connectionBlocked, (blocked) => { if (blocked) leaveGuardOpen.value = false; });
+
 const appliedRollbackRequired = computed(() => (
   appliedChangeKinds.value.profile
   || appliedChangeKinds.value.calibration
@@ -552,7 +604,7 @@ function routeHash(nextPage, section = null) {
     : "";
   const suffix = nextPage === "configurator"
     ? `/slot/${selectedProfile.value + 1}/${nextConfiguratorSection}`
-    : nextPage === "diagnostics" ? `/${nextDiagnosticsSection}` : "";
+    : nextPage === "diagnostics" ? `/${nextDiagnosticsSection}` : nextPage === "calibration" ? `/${section || calibrationSection.value}` : "";
   return `#/${nextPage}${suffix}`;
 }
 
@@ -566,7 +618,8 @@ function performGo(nextPage, section = null) {
     calibrationMode.value = "quick";
   }
   page.value = nextPage;
-  if (nextPage === "configurator" && section) configuratorSection.value = section;
+  if (nextPage === "configurator" && section) configuratorSection.value = section === "general" ? "system" : section;
+  if (nextPage === "calibration" && section) calibrationSection.value = section === "manual" ? "manual" : "automatic";
   if (nextPage === "diagnostics" && section) diagnosticsSection.value = section;
   currentRouteHash = routeHash(nextPage, section);
   history.replaceState(null, "", currentRouteHash);
@@ -590,8 +643,9 @@ function parseRouteHash(hash) {
         Math.min(3, Number(parts[slotPosition + 1]) - 1 || 0),
       );
     }
-    route.section = parts.at(-1) || "general";
+    route.section = parts.at(-1) === "general" ? "system" : parts.at(-1) || "system";
   }
+  if (nextPage === "calibration") route.section = parts[1] === "manual" ? "manual" : "automatic";
   if (nextPage === "diagnostics") {
     route.section = parts[1] || "input";
   }
@@ -599,16 +653,9 @@ function parseRouteHash(hash) {
 }
 
 async function performParsedRoute(route) {
-  const entryBlockReason = getPageEntryBlockReason({
-    page: route.page,
-    connected: connected.value,
-  });
-  if (entryBlockReason) {
-    notify(entryBlockReason);
-    if (!currentRouteHash) {
-      performGo("home");
-    }
-    return false;
+  if (iapMode.value && route.page !== "firmware") return false;
+  if (route.page === "calibration" && route.section === "manual" && calibrationOwnsHeaderActions.value) {
+    notify("Finish or cancel automatic calibration first."); return false;
   }
   if (route.profileIndex !== selectedProfile.value) {
     if (connected.value) {
@@ -746,10 +793,10 @@ function setCalibrationBound({ kind = "axis", index, axis, field, value }) {
   const targetIndex = index ?? axis;
   const fields = kind === "trigger"
     ? ["raw_released", "raw_pressed"]
-    : ["raw_min", "raw_max"];
+    : ["raw_min", "raw_center", "raw_max"];
   const target = calibrationDraft.value?.[kind]?.[targetIndex];
   if (!target || !fields.includes(field)) return;
-  target[field] = Math.max(0, Math.min(4095, Math.round(Number(value))));
+  target[field] = Number.isFinite(value) && Number.isInteger(value) && value >= 0 && value <= 4095 ? value : NaN;
 }
 
 function resetCurves(kind) {
@@ -797,6 +844,7 @@ async function downloadBackup() {
 }
 
 function chooseProfileImport() {
+  if (!connected.value && !developmentPreview) return;
   profileFileInput.value?.click();
 }
 
@@ -996,30 +1044,61 @@ function captureSavedBaselines(available = true) {
   };
 }
 
+/** Open a device, validate its configuration, then release the connection gate. */
 async function connectFlow() {
+  if (busy.value) return;
+  connectionError.value = "";
+  connectionConflict.value = false;
+  const preserve = hasUnsaved.value && !!configInfo.value;
   try {
     beginBusy();
     const device = await client.connect();
-    if (!device) {
-      return;
-    }
+    if (!device) return;
     digitalInputCommandSupported = null;
-    connected.value = true;
-    deviceLabel.value = `${device.productName || "ProShock 4"} · WebHID`;
-    if (hasUnsaved.value && configInfo.value) {
+    if (preserve) {
+      const info = parseConfigInfo((await command(COMMAND.GET_CONFIG_INFO)).payload);
+      const profile = await readProfile(selectedProfile.value);
+      const calibration = await readCalibration();
+      if (device !== retainedDevice || info.active_profile !== selectedProfile.value
+          || JSON.stringify(profile) !== JSON.stringify(profileBackup.value)
+          || JSON.stringify(calibration) !== JSON.stringify(calibrationBackup.value)
+          || info.boot_profile !== configInfo.value.boot_profile) {
+        connectionConflict.value = true;
+        throw new Error("Device settings differ from this draft. Export your draft or discard it before continuing.");
+      }
+      configInfo.value = info;
       notify("Controller reconnected. Unsaved work was preserved.");
-    } else {
-      await refreshAll();
+    } else if (!await refreshAll()) {
+      throw new Error("Could not load device settings. Please reconnect.");
     }
+    retainedDevice = device;
+    connected.value = true;
+    devGateDismissed.value = false;
+    deviceLabel.value = `${device.productName || "ProShock 4"} · WebHID`;
     startSnapshotPolling();
   } catch (error) {
     stopSessionTimers();
     connected.value = false;
+    connectionError.value = error.message;
     log(error.message);
-    notify(error.message);
-  } finally {
-    endBusy();
-  }
+    if (!connectionConflict.value) await client.close().catch(() => {});
+  } finally { endBusy(); }
+}
+/** Resolve an explicit reconnect conflict by replacing local drafts with device data. */
+async function reloadConnectedDevice() {
+  if (busy.value || !client.connected) return;
+  beginBusy();
+  try {
+    if (!await refreshAll()) throw new Error("Could not load device settings. Please reconnect.");
+    retainedDevice = client.device;
+    connected.value = true;
+    connectionConflict.value = false;
+    connectionError.value = "";
+    devGateDismissed.value = false;
+    deviceLabel.value = `${client.device.productName || "ProShock 4"} · WebHID`;
+    startSnapshotPolling();
+  } catch (error) { connectionError.value = error.message; }
+  finally { endBusy(); }
 }
 
 function stopSessionTimers() {
@@ -1032,6 +1111,9 @@ function stopSessionTimers() {
 async function disconnectDevice() {
   if (!connected.value || disconnecting.value) return;
   disconnecting.value = true;
+  stopCenterTimer();
+  stopRangeTimer();
+  stopTriggerTimer();
   stopSessionTimers();
   try {
     await client.close();
@@ -1042,6 +1124,9 @@ async function disconnectDevice() {
   } finally {
     connected.value = false;
     deviceLabel.value = "Disconnected";
+    analogSnapshot.value = null;
+    latestRaw.value = null;
+    devGateDismissed.value = false;
     disconnecting.value = false;
   }
 }
@@ -1158,9 +1243,9 @@ async function applyDraft() {
 }
 
 async function saveConfig() {
+  if (!canSave.value) return false;
   saveInProgress.value = true;
   try {
-    if (!canSave.value) return false;
     const packet = await command(COMMAND.SAVE_CONFIG);
     lastStatus.value = parseStatus(packet.payload);
     const infoPacket = await command(COMMAND.GET_CONFIG_INFO);
@@ -1688,6 +1773,7 @@ async function finishRangeCapture() {
 }
 
 async function wizardPrimary() {
+  if (!connected.value || busy.value) return;
   wizardError.value = "";
   try {
     if (wizardStep.value === "neutral") {
@@ -1843,7 +1929,12 @@ function handleHidDisconnect(event) {
   connected.value = false;
   deviceLabel.value = "Disconnected";
   stopCenterTimer();
+  stopRangeTimer();
+  stopTriggerTimer();
   stopSessionTimers();
+  analogSnapshot.value = null;
+  latestRaw.value = null;
+  devGateDismissed.value = false;
   notify(hasUnsaved.value
     ? "WebHID disconnected. Unsaved work was preserved in this page."
     : "WebHID disconnected. The game controller may remain available.");
@@ -1852,6 +1943,8 @@ function handleHidDisconnect(event) {
 onMounted(async () => {
   profileDraft.value = createFallbackProfile();
   calibrationDraft.value = clone(defaultCalibration);
+  profileBackup.value = clone(profileDraft.value);
+  calibrationBackup.value = clone(calibrationDraft.value);
   const initialRoute = parseRouteHash(location.hash || "#/home");
   await performParsedRoute(initialRoute);
   window.addEventListener("hashchange", handleHashChange);

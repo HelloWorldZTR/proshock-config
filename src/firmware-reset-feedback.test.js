@@ -33,7 +33,7 @@ function harness(failCommand = -1, status = 0) {
   }
   const props = { configConnected: false, configurationDirty: false };
   const context = vm.createContext({
-    computed: Vue.computed, ref: Vue.ref, onUnmounted: () => {},
+    computed: Vue.computed, ref: Vue.ref, watch: Vue.watch, onMounted: () => {}, onUnmounted: () => {}, defineExpose: () => {},
     defineProps: () => props, defineEmits: () => () => {}, IapHidClient: FakeClient, FirmwareUpdater,
     window: { confirm: () => true }, formatVersion: () => "1.0.0",
   });

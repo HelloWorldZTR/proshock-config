@@ -5,24 +5,16 @@
         {{ item.label }}
       </button>
     </nav>
-    <div v-if="section !== 'buttons'" class="context-row">
+    <div class="context-row">
       <span>Slot {{ selectedProfile + 1 }}</span><b>·</b><span>{{ stateLabel }}</span>
     </div>
-    <div v-if="section === 'general'" class="editor-canvas">
-      <section class="form-section">
-        <header><h1>General</h1><p>Core settings stored by the current firmware.</p></header>
-        <label><span>Poll rate</span>
-          <select :value="pollrateHz" @change="$emit('pollrate', $event.target.value)">
-            <option v-for="rate in [512,1000,2000,4000,8000]" :key="rate" :value="rate">{{ rate === 1000 ? "1 kHz" : rate >= 1000 ? `${rate / 1000} kHz` : `${rate} Hz` }}</option>
-          </select>
-        </label>
-        <label><span>Boot profile</span>
-          <select :value="bootProfile" @change="$emit('boot-profile', Number($event.target.value))">
-            <option v-for="index in 4" :key="index" :value="index - 1">Slot {{ index }}</option>
-          </select>
-        </label>
+    <div v-if="section === 'system' || section === 'general'" class="system-settings">
+      <header class="page-heading"><h1>System</h1><p>Profile input timing and device startup settings.</p></header>
+      <section class="system-group"><h2>Current Profile</h2>
+        <label class="system-pollrate"><span>Poll rate</span><select :value="pollrateHz" @change="$emit('pollrate', $event.target.value)"><option v-for="rate in [512,1000,2000,4000,8000]" :key="rate" :value="rate">{{ rate >= 1000 ? `${rate / 1000} kHz` : `${rate} Hz` }}</option></select></label>
+        <ButtonDebounceControl :model-value="profile?.button_debounce_samples" @update:model-value="$emit('button-debounce', $event)" @validity="$emit('debounce-validity', $event)" />
       </section>
-      <div class="compact-status">Live input · {{ snapshot?.adc_running ? "ADC running" : "Waiting for device" }}</div>
+      <section class="system-group"><h2>Device settings</h2><label class="system-pollrate"><span>Boot profile</span><select :value="bootProfile" @change="$emit('boot-profile', Number($event.target.value))"><option v-for="index in 4" :key="index" :value="index - 1">Slot {{ index }}</option></select></label></section>
     </div>
     <div v-else-if="section === 'sticks' || section === 'triggers'" class="editor-split">
       <div class="curve-stack">
@@ -67,28 +59,6 @@
       @update="$emit('stick-rc', $event)"
     />
     <div v-else-if="section === 'buttons'" class="button-config-stack">
-      <section class="form-section button-debounce-section">
-        <header>
-          <h1>Button response</h1>
-          <p>Set how long a physical button must stay stable before its edge is accepted.</p>
-        </header>
-        <label>
-          <span>
-            Button debounce
-            <small>{{ buttonDebounceMs }} ms · {{ buttonDebounceSamples }} samples</small>
-          </span>
-          <input
-            type="range"
-            :min="BUTTON_DEBOUNCE_MIN_SAMPLES"
-            :max="BUTTON_DEBOUNCE_MAX_SAMPLES"
-            step="1"
-            :value="buttonDebounceSamples"
-            aria-label="Button debounce duration"
-            @input="$emit('button-debounce', Number($event.target.value))"
-          >
-        </label>
-        <p class="support-note">At the fixed 8 kHz input cadence, each sample is 0.125 ms. Apply updates this Profile in RAM; Save persists it.</p>
-      </section>
       <ResolverEditor
         :resolver="profile?.resolver"
         :raw="raw"
@@ -141,59 +111,14 @@
       </div>
     </section>
     <div v-else class="advanced-canvas">
-      <header class="page-heading">
-        <h1>Advanced</h1>
-        <p>Fine-tune the current Profile's stick shape and raw input bounds.</p>
-      </header>
       <StickRoundnessEditor
         :profile="profile"
         :snapshot="snapshot"
+        :can-test="canTest"
         @update="$emit('stick-shape', $event)"
       />
-      <section class="advanced-bounds-section">
-        <header>
-          <h2>Stick and trigger raw bounds</h2>
-          <p>Edit the device-level ADC endpoints. Stick centers remain owned by calibration.</p>
-        </header>
-        <div class="advanced-bounds-grid">
-          <article v-for="(axis, index) in calibration?.axis || []" :key="axis.name">
-            <header><strong>{{ axis.name }}</strong><span>Center {{ axis.raw_center }}</span></header>
-            <label><span>Lower bound</span>
-              <input type="number" min="0" max="4095" :value="axis.raw_min"
-                @change="$emit('calibration-bound', { kind: 'axis', index, field: 'raw_min', value: $event.target.value })">
-            </label>
-            <label><span>Upper bound</span>
-              <input type="number" min="0" max="4095" :value="axis.raw_max"
-                @change="$emit('calibration-bound', { kind: 'axis', index, field: 'raw_max', value: $event.target.value })">
-            </label>
-          </article>
-          <article v-for="(trigger, index) in calibration?.trigger || []" :key="trigger.name">
-            <header><strong>{{ trigger.name }}</strong><span>Trigger</span></header>
-            <label><span>Lower bound</span>
-              <input type="number" min="0" max="4095" :value="trigger.raw_released"
-                @change="$emit('calibration-bound', { kind: 'trigger', index, field: 'raw_released', value: $event.target.value })">
-            </label>
-            <label><span>Upper bound</span>
-              <input type="number" min="0" max="4095" :value="trigger.raw_pressed"
-                @change="$emit('calibration-bound', { kind: 'trigger', index, field: 'raw_pressed', value: $event.target.value })">
-            </label>
-          </article>
-        </div>
-        <p class="support-note">Stick bounds must remain at least 128 ADC counts away from the calibrated center. Trigger lower bounds must remain below upper bounds. Apply updates RAM; Save is required before switching slots.</p>
-      </section>
     </div>
-    <footer class="configurator-apply-footer" aria-label="Current settings">
-      <div aria-live="polite">
-        <strong>Current settings</strong>
-        <span>{{ applyState?.detail }}</span>
-      </div>
-      <button
-        type="button"
-        class="primary"
-        :disabled="applyState?.disabled"
-        @click="$emit('apply')"
-      >{{ applyState?.label || "Apply current settings" }}</button>
-    </footer>
+    <SettingsApplyFooter :state="applyState" :state-label="stateLabel" @apply="$emit('apply')" />
   </div>
 </template>
 
@@ -204,22 +129,18 @@ import InputViewer from "../components/InputViewer.vue";
 import RCFilterEditor from "../components/RCFilterEditor.vue";
 import ResolverEditor from "../components/ResolverEditor.vue";
 import StickRoundnessEditor from "../components/StickRoundnessEditor.vue";
-import {
-  BUTTON_DEBOUNCE_MAX_SAMPLES,
-  BUTTON_DEBOUNCE_MIN_SAMPLES,
-  BUTTON_DEBOUNCE_SAMPLE_MS,
-  normalizeButtonDebounceSamples,
-} from "../protocol.js";
+import ButtonDebounceControl from "../components/ButtonDebounceControl.vue";
+import SettingsApplyFooter from "../components/SettingsApplyFooter.vue";
 
 const props = defineProps({
   section: String, selectedProfile: Number, stateLabel: String, profile: Object,
   baselineProfile: Object, pollrateHz: String, bootProfile: Number, raw: Object,
   snapshot: Object, calibration: Object, configInfo: Object,
-  connected: Boolean, readDigitalInput: Function, applyState: Object,
+  connected: Boolean, readDigitalInput: Function, applyState: Object, canTest: Boolean,
 });
-defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "button-debounce", "stick-shape", "stick-rc", "calibration-bound", "reset-curves", "copy-curve", "calibrate", "apply"]);
+defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "button-debounce", "stick-shape", "stick-rc", "debounce-validity", "reset-curves", "copy-curve", "calibrate", "apply"]);
 const tabs = [
-  { id: "general", label: "General" }, { id: "sticks", label: "Sticks" },
+  { id: "system", label: "System" }, { id: "sticks", label: "Sticks" },
   { id: "triggers", label: "Triggers" }, { id: "rc", label: "RC" },
   { id: "buttons", label: "Buttons" },
   { id: "lighting", label: "Lighting" }, { id: "advanced", label: "Advanced" },
@@ -233,10 +154,4 @@ const lightingSwatches = [
 const responses = computed(() => props.section === "sticks" ? props.profile?.stick_response || [] : props.profile?.trigger_response || []);
 const baselineResponses = computed(() => props.section === "sticks" ? props.baselineProfile?.stick_response : props.baselineProfile?.trigger_response);
 const responseLabels = computed(() => props.section === "sticks" ? ["Left stick radial response", "Right stick radial response"] : ["L2 response", "R2 response"]);
-const buttonDebounceSamples = computed(() => normalizeButtonDebounceSamples(
-  props.profile?.button_debounce_samples,
-));
-const buttonDebounceMs = computed(() => Number(
-  (buttonDebounceSamples.value * BUTTON_DEBOUNCE_SAMPLE_MS).toFixed(3),
-));
 </script>

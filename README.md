@@ -51,6 +51,8 @@ npm run dev
 ```sh
 npm test
 npm run build
+# 显式开发模式构建（允许手动关闭连接遮罩）
+npm run build:dev
 ```
 
 生产构建输出到 `dist/`。推送到 `main` 后，GitHub Actions 会先安装依赖、运行测试、
@@ -61,7 +63,7 @@ npm run build
 - `Apply calibration` 只更新设备 RAM shadow，不修改 profile deadzone 或 curve。
 - `Apply response` 只更新当前 profile。
 - `Save` 才触发固件的 A/B flash fail-safe 保存路径。
-- 按键页可按每个 Profile 设置 1～32 个固定 8 kHz 输入样本的消抖窗口，即
+- “配置 → 系统 → 按键消抖”可按每个 Profile 设置 1～32 个固定 8 kHz 输入样本的消抖窗口，即
   0.125～4 ms；默认 8 个样本（1 ms），修改后同样需要依次 `Apply`、`Save`。
 - 校验页面使用固件返回的真实 Q15/HID 输出，不以浏览器预览代替设备结果。
 - `Analog Calibration` 每次默认使用快速模式，在摇杆保持居中时采集单个中心窗口；
@@ -72,6 +74,14 @@ npm run build
   Q1.15 原始值。它与快速校准生成的物理边界分开保存，并在固件 axis flip 后按
   同一扇区坐标应用；正圆、方圆形、方形、八边形预设和自定义形状都复用这张表，
   修改后仍需依次 `Apply`、`Save`。
+
+高级页通过左/右摇杆切换编辑单个形状，设备实测只采集当前摇杆；切换后停止采集并保留结果。
+设备级 ADC 上下界位于“校准 → 手动边界”，与自动校准并列，影响所有 Profile。
+配置页和手动边界的页头、页脚共用同一个 Apply 状态；页头 Save 单独负责持久化。
+
+除 Home 和固件升级页外，正式构建未连接时显示不可关闭的连接遮罩；固件页可直接连接 IAP 恢复。
+开发服务和 `npm run build:dev` 允许手动关闭遮罩，刷新后恢复；仅供查看和编辑本地草稿，
+实际采集、Apply、Save 和固件写入仍需设备连接。
 
 ## 摇杆轴极性
 
@@ -84,8 +94,8 @@ npm run build
 
 ## 宏录制与编辑
 
-在 Configurator → Buttons → Macros 选择槽位。已有宏直接进入编辑；离线也可以
-添加按键/暂停、复制、插入或上下移动步骤。四个槽位共享十步容量，每步为
+在 Configurator → Buttons → Macros 选择槽位。已有宏直接进入编辑，可以
+添加按键/暂停、复制、插入或上下移动步骤。正式构建须连接手柄后进入配置。四个槽位共享十步容量，每步为
 4–1020ms，按 4ms 量化；非整步输入显示实际存储时长，空值或越界阻止完成编辑。
 编辑器显示步骤总时长，重新录制期间显示录制计时。
 

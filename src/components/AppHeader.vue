@@ -65,7 +65,11 @@
           <option v-for="item in locales" :key="item.code" :value="item.code">{{ item.nativeName }}</option>
         </select>
       </label>
+      <span v-if="connected" class="header-settings-status" aria-live="polite">{{ settingsLabel }}</span>
+      <button v-if="showApply" type="button" class="header-apply primary" :disabled="applyState?.disabled" :aria-busy="busy" @click="emit('apply')">Apply</button>
+      <button v-if="connected" type="button" class="header-save" :disabled="!canSave" @click="emit('save')">{{ saving ? 'Saving…' : 'Save' }}</button>
       <button
+        v-if="!connected"
         type="button"
         class="header-state-action"
         :class="`state-${state.mode}`"
@@ -107,7 +111,7 @@
           <button type="button" role="menuitem" :disabled="!connected || busy || iapActive" @click="emitMore('refresh')">
             <RefreshCw class="menu-icon" />Refresh device
           </button>
-          <button type="button" role="menuitem" @click="emitMore('import-profile')">Import Profile</button>
+          <button type="button" role="menuitem" :disabled="!connected && !allowOffline" @click="emitMore('import-profile')">Import Profile</button>
           <button type="button" role="menuitem" @click="emitMore('export-profile')">Export Profile</button>
           <button type="button" role="menuitem" :disabled="!connected" @click="emitMore('export-backup')">Export Full Backup</button>
           <button type="button" role="menuitem" @click="emitMore('device-info')">Device Information</button>
@@ -145,9 +149,11 @@ const props = defineProps({
   disconnecting: { type: Boolean, default: false },
   currentPage: { type: String, default: "home" },
   state: { type: Object, required: true },
+  showApply: Boolean, applyState: Object, canSave: Boolean, saving: Boolean, settingsLabel: String, allowOffline: Boolean,
   iapActive: { type: Boolean, default: false },
 });
 const emit = defineEmits([
+  "apply", "save",
   "navigate",
   "profile-select",
   "primary-action",

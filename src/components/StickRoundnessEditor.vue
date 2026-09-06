@@ -1,54 +1,11 @@
 <template>
-  <section class="roundness-editor">
-    <header class="roundness-editor-heading">
-      <div>
-        <p class="eyebrow">Profile stick shape</p>
-        <h2>Visual roundness editor</h2>
-        <p>Switch between circle, rounded-square, square, and octagon output, or drag any sector handle for a custom shape.</p>
-      </div>
-      <div class="roundness-test-actions">
-        <button type="button" :class="{ active: testActive }" @click="toggleTest">
-          {{ testActive ? "Stop actual test" : "Start actual test" }}
-        </button>
-        <button type="button" :disabled="!hasSamples" @click="resetCaptures">Clear trace</button>
-      </div>
+  <section class="roundness-editor shape-workspace">
+    <header class="shape-heading">
+      <div><h1>Stick shape</h1><p>Current Profile · Edit, apply, then test.</p></div>
+      <div class="shape-stick-switch" aria-label="Stick selection"><button v-for="(stick, index) in sticks" :key="index" type="button" :class="{ active: selectedStick === index }" :aria-pressed="selectedStick === index" @click="selectedStick = index">{{ stick.label }}</button></div>
     </header>
-
-    <div class="roundness-legend" aria-label="Roundness chart legend">
-      <span class="target">Slot target</span>
-      <span class="standard">Standard circle</span>
-      <span class="good">Measured · within ±5%</span>
-      <span class="bad">Measured · outside ±5%</span>
-    </div>
-
-    <div class="roundness-editor-grid">
-      <article
-        v-for="(stick, stickIndex) in sticks"
-        :key="stick.label"
-        class="roundness-editor-stick"
-      >
-        <header>
-          <div>
-            <span class="roundness-stick-index">S{{ stickIndex + 1 }}</span>
-            <strong>{{ stick.label }}</strong>
-          </div>
-          <span class="roundness-preset-name">{{ presetLabel(stickIndex) }}</span>
-          <span class="roundness-result-badge" :class="resultClass(stickIndex)">
-            {{ resultLabel(stickIndex) }}
-          </span>
-        </header>
-
-        <div class="roundness-preset-row" aria-label="Shape presets">
-          <button
-            v-for="preset in presets"
-            :key="preset.id"
-            type="button"
-            :class="{ active: activePreset(stickIndex) === preset.id }"
-            @click="selectPreset(stickIndex, preset.id)"
-          >{{ preset.label }}</button>
-        </div>
-
-        <div class="roundness-visual-layout">
+    <article v-for="(stick, stickIndex) in sticks" v-show="selectedStick === stickIndex" :key="stickIndex" class="shape-editor-panel">
+      <div class="shape-chart-column">
           <svg
             class="roundness-drag-chart"
             viewBox="-140 -140 280 280"
@@ -121,22 +78,17 @@
               class="roundness-live-point"
             />
           </svg>
-
-          <dl class="roundness-test-summary">
-            <div><dt>Coverage</dt><dd>{{ captureResult(stickIndex).coverage }}/16</dd></div>
-            <div><dt>Target error</dt><dd>{{ formatError(captureResult(stickIndex).errorPercent) }}</dd></div>
-            <div><dt>Live radius</dt><dd>{{ liveRadius(stickIndex) }}</dd></div>
-            <div><dt>Adjusted sectors</dt><dd>{{ changedSectorCount(stickIndex) }}/16</dd></div>
-          </dl>
-        </div>
-
-        <p class="roundness-test-note">
-          {{ testActive
-            ? "Rotate this stick around the complete outer gate. Green sectors match the selected target; red sectors need adjustment."
-            : "Dragging changes the local draft and clears its old measurement. Apply before starting an actual device test."
-          }}
-        </p>
-
+        <div class="roundness-legend" aria-label="Roundness chart legend"><span class="target">Slot target</span><span class="standard">Standard circle</span><span class="good">Measured · within ±5%</span><span class="bad">Measured · outside ±5%</span></div>
+      </div>
+      <aside class="shape-controls">
+        <section><h2>Shape presets</h2><div class="roundness-preset-row"><button v-for="preset in presets" :key="preset.id" type="button" :class="{ active: activePreset(stickIndex) === preset.id }" @click="selectPreset(stickIndex, preset.id)">{{ preset.label }}</button></div></section>
+        <section class="shape-test-section">
+          <header><h2>Device test</h2><span class="roundness-result-badge" :class="resultClass(stickIndex)">{{ resultLabel(stickIndex) }}</span></header>
+          <p>{{ canTest ? 'Rotate the selected stick around its outer edge.' : 'Connect and apply pending changes before testing.' }}</p>
+          <div class="roundness-test-actions"><button type="button" :disabled="!canTest" :class="{ active: testActive }" @click="toggleTest">{{ testActive ? 'Stop actual test' : 'Start actual test' }}</button><button type="button" :disabled="!hasSamples" @click="clearStickCapture(stickIndex)">Clear trace</button></div>
+          <dl class="roundness-test-summary"><div><dt>Coverage</dt><dd>{{ captureResult(stickIndex).coverage }}/16</dd></div><div><dt>Target error</dt><dd>{{ formatError(captureResult(stickIndex).errorPercent) }}</dd></div><div><dt>Live radius</dt><dd>{{ canTest ? liveRadius(stickIndex) : '—' }}</dd></div><div><dt>Adjusted sectors</dt><dd>{{ changedSectorCount(stickIndex) }}/16</dd></div></dl>
+        </section>
+      </aside>
         <details class="roundness-precision-values">
           <summary>Precise sector values</summary>
           <p>Post-flip coordinates: S0 right · S4 down · S8 left · S12 up. Q1.15 neutral is 32768.</p>
@@ -155,8 +107,7 @@
             </label>
           </div>
         </details>
-      </article>
-    </div>
+    </article>
   </section>
 </template>
 
@@ -183,6 +134,7 @@ import {
 const props = defineProps({
   profile: { type: Object, required: true },
   snapshot: { type: Object, default: null },
+  canTest: { type: Boolean, default: false },
 });
 const emit = defineEmits(["update"]);
 const sectorIndexes = Array.from({ length: ROUNDNESS_SECTOR_COUNT }, (_, index) => index);
@@ -195,6 +147,7 @@ const presets = [
   { id: USER_SHAPE_PRESET.CUSTOM, label: "Custom shape" },
 ];
 const testActive = ref(false);
+const selectedStick = ref(0);
 const captures = ref([createRoundnessCapture(), createRoundnessCapture()]);
 const dragState = ref(null);
 const dragUpdates = createLatestFrameUpdate(
@@ -202,7 +155,7 @@ const dragUpdates = createLatestFrameUpdate(
   (frameId) => window.cancelAnimationFrame(frameId),
   ({ point, stickIndex }) => updateFromPoint(point, stickIndex),
 );
-const hasSamples = computed(() => captures.value.some((capture) => capture.sampleCount > 0));
+const hasSamples = computed(() => captures.value[selectedStick.value].sampleCount > 0);
 const liveValues = computed(() => {
   const values = props.snapshot?.output_stick_q15;
   if (!values || values.length < 4) return [0, 0, 0, 0];
@@ -388,7 +341,8 @@ function clearStickCapture(stickIndex) {
 }
 
 function toggleTest() {
-  if (!testActive.value) resetCaptures();
+  if (!props.canTest) return;
+  if (!testActive.value) clearStickCapture(selectedStick.value);
   testActive.value = !testActive.value;
 }
 
@@ -425,9 +379,9 @@ function sectorDirection(sector) {
 watch(
   () => props.snapshot?.output_stick_q15,
   (values) => {
-    if (!testActive.value || !values || values.length < 4) return;
+    if (!props.canTest || !testActive.value || !values || values.length < 4) return;
     captures.value = captures.value.map((capture, stickIndex) => (
-      recordRoundnessSample(
+      stickIndex !== selectedStick.value ? capture : recordRoundnessSample(
         capture,
         values[stickIndex * 2] / Q15_ONE,
         values[stickIndex * 2 + 1] / Q15_ONE,
@@ -437,5 +391,10 @@ watch(
   { deep: true },
 );
 
+watch(selectedStick, () => { testActive.value = false; });
+watch([() => props.canTest, () => props.snapshot?.runtime_generation, () => JSON.stringify(props.profile?.stick_shape)], () => {
+  testActive.value = false;
+  resetCaptures();
+});
 onBeforeUnmount(() => dragUpdates.cancel());
 </script>

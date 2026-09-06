@@ -6,14 +6,6 @@
       <p>Enter the controller's isolated IAP environment before selecting or installing firmware.</p>
     </header>
 
-    <section class="firmware-recovery-note" role="note">
-      <div class="firmware-recovery-icon" aria-hidden="true"><Power /></div>
-      <div>
-        <strong>Hardware recovery is always available</strong>
-        <p>After power is removed, hold <b>PS + Options</b> while reconnecting power to enter IAP—even after an interrupted upgrade.</p>
-      </div>
-    </section>
-
     <section v-if="!iapConnected" class="firmware-entry-stage" aria-labelledby="iap-entry-title">
       <div class="firmware-entry-icon" aria-hidden="true"><Usb /></div>
       <span class="eyebrow">WebHID IAP</span>
@@ -27,7 +19,7 @@
       </template>
       <template v-else>
         <h2 id="iap-entry-title">Select an IAP device</h2>
-        <p>Select a controller that is already running in IAP mode.</p>
+        <p>Hold PS + Options while connecting power. When the red LED flashes, click Connect IAP. Alternatively, click Connect in the top-right corner, then Restart to IAP.</p>
       </template>
 
       <p v-if="configurationDirty" class="firmware-warning">Apply and Save or discard configuration changes before entering IAP.</p>
@@ -41,7 +33,7 @@
       >
         <LoaderCircle v-if="working" class="firmware-button-icon spinning" />
         <Usb v-else class="firmware-button-icon" />
-        {{ working ? "Connecting…" : configConnected && !permissionRequired ? "Enter IAP" : "Select IAP device" }}
+        {{ working ? "Connecting…" : configConnected && !permissionRequired ? "Restart to IAP" : "Connect IAP" }}
       </button>
       <small>Firmware selection and maintenance actions appear after IAP is connected.</small>
     </section>
@@ -155,10 +147,9 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   LoaderCircle,
-  Power,
   RotateCcw,
   ShieldCheck,
   TriangleAlert,
@@ -184,7 +175,7 @@ const props = defineProps({
   configConnected: { type: Boolean, default: false },
   configurationDirty: { type: Boolean, default: false },
 });
-const emit = defineEmits(["iap-session"]);
+const emit = defineEmits(["iap-session", "gate-state"]);
 
 const iapClient = new IapHidClient();
 const packageData = ref(null);
@@ -461,7 +452,19 @@ async function restartAfterFactoryReset() {
   }
 }
 
+function handleIapDisconnect(event) {
+  if (event.device !== iapClient.device) return;
+  iapConnected.value = false;
+  deviceInfo.value = null;
+}
+onMounted(() => navigator.hid?.addEventListener("disconnect", handleIapDisconnect));
 onUnmounted(() => {
-  if (!iapActive.value) void iapClient.close();
+  navigator.hid?.removeEventListener("disconnect", handleIapDisconnect);
+  void iapClient.close();
 });
+/** Expose connection status without equating an IAP transition with readiness. */
+watch([iapConnected, working, operationError], () => emit("gate-state", {
+  ready: iapConnected.value, busy: working.value, error: operationError.value,
+}), { immediate: true });
+defineExpose({ connect: () => permissionRequired.value ? authorizeIap() : connectIap() });
 </script>

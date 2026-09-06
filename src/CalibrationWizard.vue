@@ -90,8 +90,8 @@
     <footer class="wizard-actions">
       <button type="button" :disabled="busy || stepNumber <= 1 || step === 'save'" @click="$emit('back')">Back</button>
       <button type="button" :disabled="busy" @click="$emit('cancel')">Cancel</button>
-      <button type="button" class="primary wizard-primary" :disabled="busy || primaryDisabled" @click="$emit('primary')">
-        <span>{{ busy ? "Working…" : primaryLabel }}</span>
+      <button type="button" class="primary wizard-primary" :disabled="busy || offline || primaryDisabled" @click="$emit('primary')">
+        <span>{{ offline ? "Connect controller" : busy ? "Working…" : primaryLabel }}</span>
         <span
           v-if="showControllerConfirmIcons"
           class="controller-confirm-buttons"
@@ -114,6 +114,7 @@ import circleIcon from "./assets/PlayStation_button_C.svg";
 const props = defineProps({
   step: { type: String, required: true },
   busy: { type: Boolean, default: false },
+  offline: { type: Boolean, default: false },
   error: { type: String, default: "" },
   calibrationMode: { type: String, default: "quick" },
   neutralResult: { type: Object, default: null },

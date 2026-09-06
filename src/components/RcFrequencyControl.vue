@@ -9,6 +9,7 @@
       :min="boundedMinimum"
       :max="boundedMaximum"
       step="1"
+      :disabled="disabled"
       :value="roundedHz"
       @input="$emit('update', Number($event.target.value))"
     >
@@ -18,6 +19,7 @@
       :min="boundedMinimum"
       :max="boundedMaximum"
       step="1"
+      :disabled="disabled"
       :value="roundedHz"
       @change="$emit('update', Number($event.target.value))"
     >
@@ -34,6 +36,7 @@ import {
 
 const props = defineProps({
   label: { type: String, required: true },
+  disabled: { type: Boolean, default: false },
   alphaQ15: { type: Number, required: true },
   minimumHz: { type: Number, default: RC_MIN_CUTOFF_HZ },
   maximumHz: { type: Number, default: RC_MAX_CUTOFF_HZ },

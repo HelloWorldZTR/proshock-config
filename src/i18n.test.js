@@ -35,7 +35,7 @@ test("source-message placeholders preserve runtime values", () => {
 });
 
 test("analog calibration modes and progress are available in Chinese", () => {
-  assert.equal(translate("Analog Calibration", "zh-CN"), "模拟量校准");
+  assert.equal(translate("Analog Calibration", "zh-CN"), "校准");
   assert.equal(translate("Quick · Default", "zh-CN"), "快速 · 默认");
   assert.equal(
     translate("2/4 returns recorded · 7/16 center samples", "zh-CN"),

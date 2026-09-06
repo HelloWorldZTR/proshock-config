@@ -27,6 +27,8 @@ export const RANGE_SAMPLE_LIMIT = 1024;
 export const RIM_MIN_RADIUS = 0.85;
 export const SECTOR_MIN_SAMPLES = 8;
 export const STICK_MIN_SIDE_SPAN = 512;
+// Persisted bounds follow firmware validation; automatic capture requires more travel.
+const CONFIG_AXIS_MIN_SIDE_SPAN = 128;
 export const RAW_POLL_MS = 20;
 export const TRIGGER_ENDPOINT_MARGIN_RATIO = 0.02;
 export const WIZARD_STEPS = [
@@ -845,14 +847,18 @@ export function buildCalibrationDraft(base, neutral, leftRange, rightRange, trig
 
 export function validateCalibration(calibration) {
   const failures = [];
+  const channels = [...calibration.axis.flatMap((axis) => [axis.raw_min, axis.raw_center, axis.raw_max]), ...calibration.trigger.flatMap((trigger) => [trigger.raw_released, trigger.raw_pressed])];
+  if (channels.some((value) => !Number.isInteger(value) || value < 0 || value > 4095)) {
+    failures.push("ADC endpoints must be whole numbers from 0 to 4095.");
+  }
   calibration.axis.forEach((axis) => {
     if (!(axis.raw_min < axis.raw_center && axis.raw_center < axis.raw_max)) {
       failures.push(`${axis.name}: bounds must be min < center < max`);
     } else if (
-      axis.raw_center - axis.raw_min < STICK_MIN_SIDE_SPAN
-      || axis.raw_max - axis.raw_center < STICK_MIN_SIDE_SPAN
+      axis.raw_center - axis.raw_min < CONFIG_AXIS_MIN_SIDE_SPAN
+      || axis.raw_max - axis.raw_center < CONFIG_AXIS_MIN_SIDE_SPAN
     ) {
-      failures.push(`${axis.name}: one-side span is below ${STICK_MIN_SIDE_SPAN}`);
+      failures.push(`${axis.name}: one-side span is below ${CONFIG_AXIS_MIN_SIDE_SPAN}`);
     }
   });
   calibration.stick.forEach((stick) => {

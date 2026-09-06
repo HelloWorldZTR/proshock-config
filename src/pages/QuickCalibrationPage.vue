@@ -8,6 +8,7 @@
     <CalibrationWizard
       :step="step"
       :busy="busy"
+      :offline="offline"
       :error="error"
       :calibration-mode="calibrationMode"
       :neutral-result="neutralResult"
@@ -50,7 +51,7 @@ function checkStatus(check) {
 }
 
 defineProps({
-  step: String, busy: Boolean, error: String, neutralResult: Object, leftRange: Object,
+  step: String, busy: Boolean, offline: Boolean, error: String, neutralResult: Object, leftRange: Object,
   calibrationMode: String,
   centerCaptureActive: Boolean, centerCaptureStatus: Object,
   rightRange: Object, triggerCaptureActive: Boolean, triggerWindowCount: Number,
