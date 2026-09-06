@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { availableLocales, translate } from "./i18n.js";
+import { availableLocales, translate, selectInitialLocale } from "./i18n.js";
 import "./locales/zh-CN.js";
 
 test("English remains the canonical fallback and Chinese is registered", () => {
@@ -131,4 +131,14 @@ test("macro editing and recording feedback are localized without translating con
   assert.equal(translate("Stored duration: 8 ms", "zh-CN"), "实际存储时长：8 毫秒");
   assert.equal(translate("Step 2: Enter a duration from 4 to 1020 ms.", "zh-CN"), "步骤 2：请输入 4–1020 毫秒的时长。");
   assert.equal(translate("Controller disconnected. Recording stopped; captured steps were preserved.", "zh-CN"), "手柄已断开，录制已停止，已捕获的步骤已保留。");
+});
+
+test("initial locale follows supported browser preferences unless manually selected", () => {
+  assert.equal(selectInitialLocale("", ["zh-CN", "en-US"]), "zh-CN");
+  assert.equal(selectInitialLocale("", ["en-US", "zh-CN"]), "en");
+  assert.equal(selectInitialLocale("", ["fr-FR", "zh-TW"]), "zh-CN");
+  assert.equal(selectInitialLocale("en", ["zh-CN"]), "en");
+  assert.equal(selectInitialLocale("invalid", ["zh-Hans-CN"]), "zh-CN");
+  assert.equal(selectInitialLocale("", ["fr-FR"]), "en");
+  assert.equal(selectInitialLocale("", []), "en");
 });

@@ -44,7 +44,7 @@ function resolveLocale(candidate) {
   if (localeRegistry.has(candidate)) return candidate;
   const language = String(candidate || "").split("-")[0].toLowerCase();
   return [...localeRegistry.keys()].find((code) => code.split("-")[0] === language)
-    || DEFAULT_LOCALE;
+    || null;
 }
 
 export function translate(source, targetLocale = locale.value) {
@@ -114,13 +114,22 @@ function applyLocale() {
 }
 
 export function setLocale(nextLocale) {
-  locale.value = resolveLocale(nextLocale);
+  locale.value = resolveLocale(nextLocale) || DEFAULT_LOCALE;
   try {
     window.localStorage.setItem(STORAGE_KEY, locale.value);
   } catch {
     // Storage may be unavailable in private mode; the live selection still works.
   }
   applyLocale();
+}
+
+/** @brief Match saved preference first, then browser languages in priority order. */
+export function selectInitialLocale(preferred, languages = []) {
+  for (const candidate of [preferred, ...languages]) {
+    const match = resolveLocale(candidate);
+    if (match) return match;
+  }
+  return DEFAULT_LOCALE;
 }
 
 /** Initialize from the persisted preference, then the browser language. */
@@ -131,7 +140,7 @@ export function initializeI18n() {
   } catch {
     preferred = "";
   }
-  locale.value = resolveLocale(preferred || navigator.languages?.[0] || navigator.language);
+  locale.value = selectInitialLocale(preferred, [...(navigator.languages || []), navigator.language]);
   document.documentElement.lang = locale.value;
 }
 
