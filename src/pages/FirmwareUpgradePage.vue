@@ -149,6 +149,7 @@
           <button v-else type="button" class="danger-button" :disabled="working" @click="factoryReset">Erase settings and restore defaults</button>
         </div>
       </section>
+      <p v-if="operationError && !installationStarted" class="firmware-error" role="alert">{{ operationError }}</p>
     </template>
   </div>
 </template>
@@ -442,8 +443,10 @@ function stayInIapAfterFactoryReset() {
   factoryResetMessage.value = "Factory reset is complete. The controller will remain in IAP until installed firmware is started.";
 }
 
+/** @brief Restart after clearing settings, discarding errors from an earlier attempt. */
 async function restartAfterFactoryReset() {
   if (working.value || !deviceInfo.value?.appValid) return;
+  resetOperation();
   working.value = true;
   try {
     currentPhase.value = "reboot";
