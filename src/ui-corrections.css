@@ -37,7 +37,7 @@
 .bounds-row { display: grid; grid-template-columns: minmax(64px, .65fr) minmax(100px, 1fr) minmax(70px, .7fr) minmax(100px, 1fr); align-items: center; gap: 24px; padding: 8px 0; font-size: 14px; }
 .bounds-row input { width: 100%; min-width: 0; font-size: 14px; }
 .bounds-labels { color: var(--secondary); font-size: 12px; }
-.bounds-center { color: var(--secondary); font-family: ui-monospace, monospace; }
+.bounds-center { color: var(--secondary); font-family: var(--font-mono); }
 .advanced-canvas .shape-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 18px; }
 .shape-heading h1 { margin-bottom: 6px; }
 .shape-heading p { margin: 0; font-size: 14px; }
@@ -102,3 +102,8 @@
 .configurator-content[data-section="rc"], .configurator-content[data-section="advanced"] { max-width: 1280px; }
 .configurator-content[data-section="lighting"] { max-width: 980px; }
 .configurator-content > .rc-page-canvas, .configurator-content > .advanced-canvas, .configurator-content > .lighting-section { max-width: none; }
+
+.header-language-button { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+.language-menu { width: 160px; }
+.language-menu button { display: flex; align-items: center; justify-content: space-between; min-height: 38px; white-space: nowrap; }
+.language-menu button.selected { color: var(--accent); }

@@ -59,12 +59,16 @@
     </nav>
 
     <div class="app-header-actions">
-      <label class="language-switcher">
-        <span class="visually-hidden">Language</span>
-        <select :value="currentLocale" aria-label="Language" @change="setLocale($event.target.value)">
-          <option v-for="item in locales" :key="item.code" :value="item.code">{{ item.nativeName }}</option>
-        </select>
-      </label>
+      <div class="more-wrap language-menu-wrap">
+        <button ref="languageTrigger" type="button" class="icon-button header-language-button" title="Language" aria-label="Language" aria-haspopup="menu" :aria-expanded="languageOpen" @click="toggleLanguageMenu">
+          <Globe class="icon" />
+        </button>
+        <div v-if="languageOpen" class="more-menu header-more-menu language-menu" role="menu" aria-label="Language">
+          <button v-for="item in locales" :key="item.code" type="button" role="menuitemradio" :aria-checked="currentLocale === item.code" :class="{ selected: currentLocale === item.code }" @click="selectLanguage(item.code)">
+            <span>{{ item.nativeName }}</span><Check v-if="currentLocale === item.code" class="menu-icon" />
+          </button>
+        </div>
+      </div>
       <span v-if="connected" class="header-settings-status" aria-live="polite">{{ settingsLabel }}</span>
       <button v-if="showApply" type="button" class="header-apply primary" :disabled="applyState?.disabled" :aria-busy="busy" @click="emit('apply')">Apply</button>
       <button v-if="connected" type="button" class="header-save" :disabled="!canSave" @click="emit('save')">{{ saving ? 'Saving…' : 'Save' }}</button>
@@ -126,6 +130,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   Activity,
+  Check,
+  Globe,
   ChevronDown,
   Gauge,
   Home,
@@ -169,6 +175,8 @@ const emit = defineEmits([
 const headerRoot = ref(null);
 const profileTrigger = ref(null);
 const moreTrigger = ref(null);
+const languageTrigger = ref(null);
+const languageOpen = ref(false);
 const profileOpen = ref(false);
 const moreOpen = ref(false);
 const locales = availableLocales();
@@ -183,34 +191,54 @@ const navigation = [
   { id: "diagnostics", label: "Diagnostics", shortLabel: "Diagnostics", icon: Activity },
 ];
 
+/** @brief Toggle the language dropdown and close other header menus. */
+function toggleLanguageMenu() {
+  languageOpen.value = !languageOpen.value;
+  profileOpen.value = false;
+  moreOpen.value = false;
+}
+
+/** @brief Apply the chosen locale and return focus to its trigger. */
+function selectLanguage(code) {
+  setLocale(code);
+  languageOpen.value = false;
+  languageTrigger.value?.focus();
+}
+
 function toggleProfileMenu() {
+  languageOpen.value = false;
   profileOpen.value = !profileOpen.value;
   moreOpen.value = false;
 }
 
 function toggleMoreMenu() {
   moreOpen.value = !moreOpen.value;
+  languageOpen.value = false;
   profileOpen.value = false;
 }
 
 function selectProfile(index) {
+  languageOpen.value = false;
   profileOpen.value = false;
   emit("profile-select", index);
 }
 
 function navigate(page) {
+  languageOpen.value = false;
   profileOpen.value = false;
   moreOpen.value = false;
   emit("navigate", page);
 }
 
 function emitPrimaryAction() {
+  languageOpen.value = false;
   profileOpen.value = false;
   moreOpen.value = false;
   emit("primary-action", props.state.action);
 }
 
 function emitDisconnect() {
+  languageOpen.value = false;
   profileOpen.value = false;
   moreOpen.value = false;
   emit("disconnect");
@@ -230,7 +258,8 @@ function closeMenus(event) {
   }
   const returnTarget = profileOpen.value
     ? profileTrigger.value
-    : moreOpen.value ? moreTrigger.value : null;
+    : moreOpen.value ? moreTrigger.value : languageOpen.value ? languageTrigger.value : null;
+  languageOpen.value = false;
   profileOpen.value = false;
   moreOpen.value = false;
   if (event.type === "keydown") {
