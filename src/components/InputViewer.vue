@@ -43,6 +43,7 @@
 import { computed, onUnmounted, ref, watch } from "vue";
 import ControllerVisual from "../ControllerVisual.vue";
 import { normalizeAxis, normalizedTrigger } from "../calibration.js";
+import { analogAxisInvert } from "../analog-direction.js";
 import { Q15_ONE } from "../protocol.js";
 import InputResponseDetails from "./InputResponseDetails.vue";
 
@@ -70,7 +71,7 @@ const rawStickValues = computed(() => {
   const adc = props.raw?.adc;
   if (!adc || adc.length < 4) return [0, 0, 0, 0];
   return adc.slice(0, 4).map((value, index) => (
-    normalizeAxis(value, props.calibration.axis[index], index, props.axisInvert)
+    normalizeAxis(value, props.calibration.axis[index], index, analogAxisInvert(props.calibration, props.axisInvert))
   ));
 });
 const rawTriggerValues = computed(() => {

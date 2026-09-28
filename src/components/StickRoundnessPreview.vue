@@ -1,6 +1,6 @@
 <template>
   <section class="roundness-preview">
-    <header class="roundness-toolbar">
+    <header v-if="!positionOnly" class="roundness-toolbar">
       <div>
         <strong>Stick roundness</strong>
         <small>{{ active ? "Rotate both sticks around the full outer gate" : "Start to capture 16 outer directions" }}</small>
@@ -17,20 +17,20 @@
       <article v-for="(stick, index) in sticks" :key="stick.label" class="roundness-stick">
         <header>
           <strong>{{ stick.label }}</strong>
-          <span>{{ stick.result.coverage }}/16</span>
+          <span v-if="!positionOnly">{{ stick.result.coverage }}/16</span>
         </header>
         <svg viewBox="-116 -116 232 232" role="img" :aria-label="`${stick.label} position and roundness`">
           <circle cx="0" cy="0" r="100" class="roundness-target-circle" />
           <line x1="-100" y1="0" x2="100" y2="0" />
           <line x1="0" y1="-100" x2="0" y2="100" />
           <polygon
-            v-if="stick.result.coverage === 16"
+            v-if="!positionOnly && stick.result.coverage === 16"
             :points="stick.trace"
             class="roundness-trace"
           />
-          <circle :cx="stick.x * 100" :cy="stick.y * 100" r="6" class="roundness-position-dot" />
+          <circle v-if="liveAvailable" :cx="stick.x * 100" :cy="stick.y * 100" r="6" class="roundness-position-dot" />
         </svg>
-        <dl>
+        <dl v-if="!positionOnly">
           <div>
             <dt>Roundness error</dt>
             <dd>{{ formatError(stick.result.errorPercent) }}</dd>
@@ -56,6 +56,8 @@ import {
 
 const props = defineProps({
   stickValues: { type: Array, required: true },
+  positionOnly: { type: Boolean, default: false },
+  liveAvailable: { type: Boolean, default: true },
 });
 
 const active = ref(false);

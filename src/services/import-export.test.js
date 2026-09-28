@@ -5,6 +5,7 @@ import {
   PROFILE_FORMAT,
   crc32,
   exportProfile,
+  exportBackup,
   importProfile,
   validateBackup,
   validateEnvelope,
@@ -19,9 +20,13 @@ import {
   PROFILE_VERSION,
   createLinearResponse,
   createDefaultStickRc,
+  createDefaultAnalogCalibration,
+  parseAnalogCalibration,
+  writeAnalogCalibrationToPayload,
   parseProfile,
   writeProfileDraftToPayload,
 } from "../protocol.js";
+import { changeAnalogDirection } from "../analog-direction.js";
 
 globalThis.btoa = (value) => Buffer.from(value, "binary").toString("base64");
 globalThis.atob = (value) => Buffer.from(value, "base64").toString("binary");
@@ -126,9 +131,12 @@ test("legacy full backups migrate all four Profile v5 payloads", () => {
       profile_bytes: Buffer.from(bytes).toString("base64"),
     };
   });
+  const legacyCalibration = createDefaultAnalogCalibration();
+  legacyCalibration.calibration_version = 1;
+  writeAnalogCalibrationToPayload(legacyCalibration.raw, legacyCalibration);
   const payload = {
     profiles: legacyProfiles,
-    calibration_bytes: Buffer.alloc(ANALOG_CALIBRATION_SIZE).toString("base64"),
+    calibration_bytes: Buffer.from(legacyCalibration.raw).toString("base64"),
   };
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
   const migrated = validateBackup({
@@ -144,6 +152,19 @@ test("legacy full backups migrate all four Profile v5 payloads", () => {
   assert.ok(migrated.profiles.every(
     (profile) => profile.button_debounce_samples === BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
   ));
+});
+
+test("device backups serialize direction drafts and reload without another reflection", () => {
+  let calibration = createDefaultAnalogCalibration();
+  calibration.stick[0].radius_q15[3] = 35000;
+  calibration = changeAnalogDirection(calibration, 0, true);
+  calibration = changeAnalogDirection(calibration, 4, true);
+  const backup = exportBackup({ pollrate_hz:1000, boot_profile:0, feature_flags:0 }, Array.from({length:4},fixtureProfile), calibration);
+  const restored = parseAnalogCalibration(validateBackup(backup).calibration);
+  assert.equal(restored.direction_mask, 17);
+  assert.deepEqual(restored.stick, calibration.stick);
+  assert.deepEqual(restored.trigger, calibration.trigger);
+  assert.deepEqual(restored.axis, calibration.axis);
 });
 
 test("Profile import rejects invalid RC ordering", () => {

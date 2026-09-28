@@ -37,6 +37,49 @@ function harness() {
   return code => vm.runInContext(code, context);
 }
 
+test('hardware direction edits are global calibration drafts and preserve profile and ADC data', () => {
+  const run = harness();
+  run('connected.value = true; page.value = "configurator"; latestRaw.value = {adc:[100,200,300,400,3900,100]}; let originalProfile = JSON.stringify(profileDraft.value); let originalAxis = JSON.stringify(calibrationDraft.value.axis); setAnalogDirection({channel:0,inverted:true}); setAnalogDirection({channel:4,inverted:true})');
+  assert.equal(run('calibrationDraft.value.direction_mask'), 17);
+  assert.equal(run('JSON.stringify(profileDraft.value) === originalProfile'), true);
+  assert.equal(run('JSON.stringify(calibrationDraft.value.axis) === originalAxis'), true);
+  assert.equal(run('latestRaw.value.adc[0]'), 100);
+  assert.equal(run('calibrationDraft.value.trigger[0].raw_released'), 4085);
+  assert.equal(run('draftAxisInvert.value[0]'), true);
+  assert.equal(run('calibrationChanged.value'), true);
+  assert.equal(run('profileChanged.value'), false);
+  assert.equal(run('canApply.value'), true);
+  run('busy.value = true; setAnalogDirection({channel:0,inverted:false})');
+  assert.equal(run('calibrationDraft.value.direction_mask'), 17);
+});
+
+test('automatic calibration cannot capture with unapplied directions', async () => {
+  const run = harness();
+  run('connected.value = true; page.value = "configurator"; setAnalogDirection({channel:1,inverted:true}); page.value = "calibration"; calibrationSection.value = "automatic"; wizardStep.value = "neutral"; let captures = 0; loadAllProfiles = async () => {captures++; return []}; startCenterCapture = async () => {captures++}');
+  await run('wizardPrimary()');
+  assert.equal(run('captures'), 0);
+  assert.match(run('wizardError.value'), /Apply hardware directions/);
+  run('calibrationBackup.value = clone(calibrationDraft.value)');
+  await run('wizardPrimary()');
+  assert.equal(run('captures'), 2);
+});
+
+test('calibration write uses the connected payload version and carries direction once', async () => {
+  const run = harness();
+  run('let submittedVersion; let submittedBytes; writeChunked = async (begin,set,commit,bytes,version) => {submittedVersion = version[0]; submittedBytes = bytes; return {payload:new Uint8Array(56)}}');
+  run('setAnalogDirection({channel:3,inverted:true}); setAnalogDirection({channel:5,inverted:true})');
+  await run('writeCalibration()');
+  assert.equal(run('submittedVersion'), 2);
+  assert.equal(run('submittedBytes[108]'), 40);
+  assert.equal(run('calibrationBackup.value.direction_mask'), 40);
+  assert.equal(run('calibrationChanged.value'), false);
+  run('calibrationDraft.value.calibration_version = 1; calibrationDraft.value.direction_mask = 0; calibrationDraft.value.trigger[1] = clone(defaultCalibration.trigger[1]); calibrationDraft.value.raw[108] = 0x5a');
+  await run('writeCalibration()');
+  assert.equal(run('submittedVersion'), 1);
+  assert.equal(run('submittedBytes[108]'), 0x5a);
+  assert.equal(run('calibrationBackup.value.calibration_version'), 1);
+});
+
 test('failed initial configuration load never opens the connection gate', async () => {
   const run = harness();
   run('page.value = "configurator"; refreshAll = async () => false');

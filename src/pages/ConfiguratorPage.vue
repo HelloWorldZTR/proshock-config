@@ -16,6 +16,7 @@
         <ButtonDebounceControl :model-value="profile?.button_debounce_samples" @update:model-value="$emit('button-debounce', $event)" @validity="$emit('debounce-validity', $event)" />
       </section>
       <section class="system-group"><h2>Device settings</h2><label class="system-pollrate"><span>Boot profile</span><select :value="bootProfile" @change="$emit('boot-profile', Number($event.target.value))"><option v-for="index in 4" :key="index" :value="index - 1">Slot {{ index }}</option></select></label></section>
+      <AnalogDirectionEditor :calibration="calibration" :raw="raw" :legacy-axis-invert="configInfo?.axis_invert" :disabled="directionDisabled" @direction="$emit('direction', $event)" />
     </div>
     <div v-else-if="section === 'sticks' || section === 'triggers'" class="editor-split">
       <div class="curve-stack">
@@ -43,7 +44,7 @@
         :raw="raw"
         :snapshot="snapshot"
         :calibration="calibration"
-        :axis-invert="configInfo?.axis_invert"
+        :axis-invert="previewAxisInvert"
         :detail-kind="section === 'sticks' ? 'sticks' : 'triggers'"
         mode="compact"
         title="Live preview"
@@ -56,7 +57,7 @@
       :raw="raw"
       :snapshot="snapshot"
       :calibration="calibration"
-      :axis-invert="configInfo?.axis_invert"
+      :axis-invert="previewAxisInvert"
       @update="$emit('stick-rc', $event)"
     />
     <div v-else-if="section === 'buttons'" class="button-config-stack">
@@ -126,6 +127,8 @@
 
 <script setup>
 import { computed } from "vue";
+import AnalogDirectionEditor from "../components/AnalogDirectionEditor.vue";
+import { analogAxisInvert } from "../analog-direction.js";
 import CurveEditor from "../CurveEditor.vue";
 import InputViewer from "../components/InputViewer.vue";
 import RCFilterEditor from "../components/RCFilterEditor.vue";
@@ -138,9 +141,10 @@ const props = defineProps({
   section: String, selectedProfile: Number, stateLabel: String, profile: Object,
   baselineProfile: Object, pollrateHz: String, bootProfile: Number, raw: Object,
   snapshot: Object, calibration: Object, configInfo: Object,
-  connected: Boolean, readDigitalInput: Function, applyState: Object, canTest: Boolean,
+  directionDisabled: Boolean, connected: Boolean, readDigitalInput: Function, applyState: Object, canTest: Boolean,
 });
-defineEmits(["section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "button-debounce", "stick-shape", "stick-rc", "debounce-validity", "reset-curves", "copy-curve", "calibrate", "apply"]);
+defineEmits(["direction", "section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "button-debounce", "stick-shape", "stick-rc", "debounce-validity", "reset-curves", "copy-curve", "calibrate", "apply"]);
+const previewAxisInvert = computed(() => analogAxisInvert(props.calibration, props.configInfo?.axis_invert));
 const tabs = [
   { id: "system", label: "System" }, { id: "sticks", label: "Sticks" },
   { id: "triggers", label: "Triggers" }, { id: "rc", label: "RC" },

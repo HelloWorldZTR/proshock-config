@@ -80,11 +80,11 @@ export const CONFIG_INFO_SIZE = 56;
 export const RAW_SIZE = 20;
 export const DIGITAL_INPUT_SIZE = 8;
 export const PROTOCOL_VERSION = 2;
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 export const LEGACY_PROFILE_VERSION = 5;
 export const PREVIOUS_PROFILE_VERSION = 6;
 export const PROFILE_VERSION = 7;
-export const ANALOG_CALIBRATION_VERSION = 1;
+export const ANALOG_CALIBRATION_VERSION = 2;
 export const CURVE_POINT_COUNT = 9;
 export const CURVE_TYPE_PIECEWISE_LINEAR = 1;
 export const ROUNDNESS_SECTOR_COUNT = 16;
@@ -362,6 +362,7 @@ export function migrateLegacyProfilePayload(
 export function createDefaultAnalogCalibration() {
   return {
     calibration_version: ANALOG_CALIBRATION_VERSION,
+    direction_mask: 0,
     flags: 0,
     axis: AXES.map((name) => ({
       name,
@@ -390,6 +391,7 @@ export function parseAnalogCalibration(payload) {
   const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
   return {
     calibration_version: view.getUint16(0, true),
+    direction_mask: view.getUint16(0, true) >= 2 ? payload[108] : 0,
     flags: view.getUint16(2, true),
     axis: AXES.map((name, index) => {
       const offset = 4 + index * 8;
@@ -428,7 +430,8 @@ export function writeAnalogCalibrationToPayload(payload, calibration) {
     throw new Error(`Unexpected analog calibration size: ${payload.byteLength}`);
   }
   const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
-  view.setUint16(0, ANALOG_CALIBRATION_VERSION, true);
+  view.setUint16(0, calibration.calibration_version, true);
+  if (calibration.calibration_version >= 2) payload[108] = calibration.direction_mask;
   view.setUint16(2, calibration.flags || 0, true);
   calibration.axis.forEach((axis, index) => {
     const offset = 4 + index * 8;
@@ -481,6 +484,8 @@ export function parseConfigInfo(payload) {
     feature_flags: view.getUint32(24, true),
     axis_invert_mask: payload.byteLength >= CONFIG_INFO_SIZE ? payload[52] & 0x0f : null,
     axis_invert: axisInvert,
+    analog_direction_mask: payload.byteLength >= CONFIG_INFO_SIZE && payload[54] >= 2 ? payload[53] : null,
+    analog_calibration_version: payload.byteLength >= CONFIG_INFO_SIZE && payload[54] >= 2 ? payload[54] : 1,
     profiles: Array.from({ length: PROFILE_COUNT }, (_, index) => {
       const offset = 28 + index * 6;
       return {

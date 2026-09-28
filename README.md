@@ -83,11 +83,24 @@ npm run build:dev
 开发服务和 `npm run build:dev` 允许手动关闭遮罩，刷新后恢复；仅供查看和编辑本地草稿，
 实际采集、Apply、Save 和固件写入仍需设备连接。
 
-## 摇杆轴极性
+## 硬件方向与校准坐标
 
-新固件在 `GET_CONFIG_INFO` 末尾返回四个摇杆轴的 flip 位，前端据此统一四角回中、
-圆度分区和 raw preview 的坐标方向。为兼容尚未提供该字段的旧原型固件，52 字节旧
-响应仍按四轴均不 flip 处理；新响应为 56 字节，位 0..3 依次表示 LX、LY、RX、RY。
+“配置 → 系统 → 硬件方向”和“校准 → 手动设置”可配置 LX、LY、RX、RY、L2、R2
+六路方向。向右/向下移动摇杆、按下扳机，根据实时 ADC 原始值选择增大或减小。
+四行摇杆设置右侧复用 RC 页的双圆预览，两个扳机设置右侧显示进度条。方向预览直接从
+原始 ADC 按草稿校准边界与方向归一化，不读取固件处理输出，也不经过 RC、形状或曲线。
+
+- 原始 ADC 数值与通道顺序保持硬件读数。归一化输出固定为右/X+、下/Y+、松开 0、按下 1。
+- 方向是设备级配置，全部槽位共用。先 Apply 方向，再自动校准，最后 Save 持久化。
+- 摇杆边界始终是数值 min < center < max；反向扳机允许 pressed < released。
+- 切换方向时只重排一次物理圆度扇区；Profile 形状保持固定输出坐标。写入、重新加载和
+  备份导出不再次翻转。扳机翻向交换端点角色，ADC 数值不取补数。
+- 校准 V2 的 116 字节载荷中，byte 108 保存六路 direction mask。协议包长和 Profile 格式不变。
+  Schema 11 固件会迁移旧校准；旧固件仍按 V1 写入校准，其方向控件为只读。
+- `GET_CONFIG_INFO` 仍为 56 字节：byte 52 为四轴运行时 flip，byte 53 为已应用六路 mask，
+  byte 54 为校准版本。52 字节旧响应仍回退到原型板的四轴不 flip。
+
+完整坐标与存储约定见主仓库 README 的 **Analog direction and calibration coordinate contract**。
 
 界面使用的 DualShock 图形资源及其授权信息见
 [`src/assets/dualshock-tools-LICENSE.txt`](src/assets/dualshock-tools-LICENSE.txt)。

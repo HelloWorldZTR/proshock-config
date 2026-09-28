@@ -9,10 +9,12 @@ import {
   PROFILE_VERSION,
   SCHEMA_VERSION,
   parseProfile,
+  parseAnalogCalibration,
   migrateLegacyProfilePayload,
   writeProfileDraftToPayload,
+  writeAnalogCalibrationToPayload,
 } from "../protocol.js";
-import { validateResponse } from "../calibration.js";
+import { validateResponse, validateCalibration } from "../calibration.js";
 import { validateStickRc } from "../rc-filter.js";
 import { validateResolver } from "../resolver-schema.js";
 
@@ -82,6 +84,8 @@ export function exportProfile(profile) {
 }
 
 export function exportBackup(configInfo, profiles, calibration) {
+  const calibrationBytes = new Uint8Array(calibration.raw);
+  writeAnalogCalibrationToPayload(calibrationBytes, calibration);
   return serialize(BACKUP_FORMAT, {
     config: {
       pollrate_hz: configInfo.pollrate_hz,
@@ -90,7 +94,7 @@ export function exportBackup(configInfo, profiles, calibration) {
     },
     profiles: profiles.map((profile) => exportProfile(profile).payload),
     calibration_version: calibration.calibration_version,
-    calibration_bytes: bytesToBase64(calibration.raw),
+    calibration_bytes: bytesToBase64(calibrationBytes),
   });
 }
 
@@ -177,6 +181,11 @@ export function validateBackup(envelope) {
   }
   const calibration = base64ToBytes(envelope.payload.calibration_bytes);
   if (calibration.byteLength !== ANALOG_CALIBRATION_SIZE) throw new Error("Calibration payload length is invalid.");
+  const parsed = parseAnalogCalibration(calibration);
+  if ((envelope.payload.calibration_version != null && envelope.payload.calibration_version !== parsed.calibration_version)
+      || !validateCalibration(parsed).pass) {
+    throw new Error("Backup calibration version, directions or endpoints are invalid.");
+  }
   return {
     envelope,
     profiles: envelope.payload.profiles.map(importBackupProfile),

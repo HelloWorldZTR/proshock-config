@@ -5,6 +5,7 @@
       <h1>Analog Calibration</h1>
       <p class="calibration-promise">Analog Calibration only updates this device's physical stick and trigger ranges. It never modifies any Profile deadzone, response curve, button, or lighting setting.</p>
     </header>
+    <p v-if="step === 'neutral'" class="support-note">Check Hardware directions in Manual settings and Apply before starting calibration.</p>
     <CalibrationWizard
       :step="step"
       :busy="busy"

@@ -51,6 +51,7 @@
       :boot-profile="bootProfile" :raw="latestRaw" :snapshot="liveInputSnapshot"
       :calibration="calibrationDraft || defaultCalibration" :config-info="configInfo"
       :connected="connected" :read-digital-input="getDigitalInput"
+      :direction-disabled="busy || saveInProgress || calibrationOwnsHeaderActions" @direction="setAnalogDirection"
       :apply-state="configuratorApplyState"
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
       @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event"
@@ -67,7 +68,11 @@
         <button type="button" :class="{ active: calibrationSection === 'manual' }" :disabled="calibrationOwnsHeaderActions" @click="requestGo('calibration', 'manual')">Manual settings</button>
       </nav>
       <div v-if="calibrationSection === 'manual'" class="page manual-bounds-page">
-        <ManualBoundsEditor :calibration="calibrationDraft || defaultCalibration" :errors="calibrationValidation.failures" :apply-state="configuratorApplyState" :state-label="stateLabel" @update="setCalibrationBound" @apply="applyDraft" />
+        <ManualBoundsEditor :calibration="calibrationDraft || defaultCalibration" :errors="calibrationValidation.failures" :apply-state="configuratorApplyState" :state-label="stateLabel" @update="setCalibrationBound" @apply="applyDraft">
+          <template #directions>
+            <AnalogDirectionEditor :calibration="calibrationDraft || defaultCalibration" :raw="latestRaw" :legacy-axis-invert="configInfo?.axis_invert" :disabled="busy || saveInProgress || calibrationOwnsHeaderActions" @direction="setAnalogDirection" />
+          </template>
+        </ManualBoundsEditor>
       </div>
     <QuickCalibrationPage
       v-else
@@ -138,6 +143,8 @@ import {
 } from "./app-shell-state.js";
 import { isConnectionBlocked } from "./connection-gate.js";
 import ConnectionGate from "./components/ConnectionGate.vue";
+import AnalogDirectionEditor from "./components/AnalogDirectionEditor.vue";
+import { analogAxisInvert, changeAnalogDirection } from "./analog-direction.js";
 import ManualBoundsEditor from "./components/ManualBoundsEditor.vue";
 import AppHeader from "./components/AppHeader.vue";
 import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
@@ -161,7 +168,6 @@ import {
 } from "./calibration-controls.js";
 import {
   ANALOG_CALIBRATION_SIZE,
-  ANALOG_CALIBRATION_VERSION,
   BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
   COMMAND,
   CONFIG_STATUS_NAME,
@@ -322,6 +328,8 @@ const pollrateHz = computed({
 const liveInputSnapshot = computed(() => {
   return createLiveInputSnapshot(analogSnapshot.value);
 });
+const draftAxisInvert = computed(() => analogAxisInvert(calibrationDraft.value, configInfo.value?.axis_invert));
+
 const calibrationValidation = computed(() => (
   calibrationDraft.value
     ? validateCalibration(calibrationDraft.value)
@@ -789,6 +797,12 @@ function setStickRc({ stickIndex, value }) {
   profileDraft.value.stick_rc[stickIndex] = value;
 }
 
+/** @brief Change global direction and its physical calibration coordinates together. */
+function setAnalogDirection({ channel, inverted }) {
+  if (!calibrationDraft.value || busy.value || saveInProgress.value || calibrationOwnsHeaderActions.value) return;
+  calibrationDraft.value = changeAnalogDirection(calibrationDraft.value, channel, inverted);
+}
+
 function setCalibrationBound({ kind = "axis", index, axis, field, value }) {
   const targetIndex = index ?? axis;
   const fields = kind === "trigger"
@@ -962,7 +976,7 @@ async function writeCalibrationValue(value) {
     COMMAND.SET_ANALOG_CALIBRATION_CHUNK,
     COMMAND.COMMIT_ANALOG_CALIBRATION_WRITE,
     bytes,
-    makeVersionPayload(ANALOG_CALIBRATION_VERSION),
+    makeVersionPayload(value.calibration_version),
     0,
     new Uint8Array(),
   );
@@ -1647,7 +1661,7 @@ async function startCenterCapture() {
   };
   centerReturnCapture = calibrationMode.value === "quick"
     ? createQuickCenterCapture()
-    : createCenterReturnCapture(configInfo.value?.axis_invert);
+    : createCenterReturnCapture(draftAxisInvert.value);
   syncCenterCaptureStatus();
   scheduleCenterPoll();
 }
@@ -1667,13 +1681,13 @@ function scheduleRangePoll() {
               rangeSamples.value,
               0,
               neutralResult.value,
-              configInfo.value?.axis_invert,
+              draftAxisInvert.value,
             ),
             rightSectorCounts: estimateStickCoverage(
               rangeSamples.value,
               1,
               neutralResult.value,
-              configInfo.value?.axis_invert,
+              draftAxisInvert.value,
             ),
           };
         }
@@ -1715,7 +1729,7 @@ function stopTriggerTimer() {
 
 async function completeTriggerCycleCapture() {
   stopTriggerTimer();
-  const triggers = analyzeTriggers(releasedSamples.value, triggerPressWindows.value);
+  const triggers = analyzeTriggers(releasedSamples.value, triggerPressWindows.value, calibrationDraft.value.direction_mask);
   calibrationDraft.value = buildCalibrationDraft(
     calibrationDraft.value,
     neutralResult.value,
@@ -1756,7 +1770,7 @@ function scheduleTriggerCyclePoll() {
 function startTriggerCycleCapture() {
   stopTriggerTimer();
   triggerPressWindows.value = [];
-  triggerCycleCapture = createTriggerCycleCapture(releasedSamples.value);
+  triggerCycleCapture = createTriggerCycleCapture(releasedSamples.value, calibrationDraft.value.direction_mask);
   triggerCaptureActive.value = true;
   scheduleTriggerCyclePoll();
 }
@@ -1767,13 +1781,13 @@ async function finishRangeCapture() {
       rangeSamples.value,
       0,
       neutralResult.value,
-      configInfo.value?.axis_invert,
+      draftAxisInvert.value,
     );
     const nextRightRange = analyzeStickRange(
       rangeSamples.value,
       1,
       neutralResult.value,
-      configInfo.value?.axis_invert,
+      draftAxisInvert.value,
     );
     leftRange.value = nextLeftRange;
     rightRange.value = nextRightRange;
@@ -1793,6 +1807,7 @@ async function wizardPrimary() {
   wizardError.value = "";
   try {
     if (wizardStep.value === "neutral") {
+      if (calibrationChanged.value) throw new Error("Apply hardware directions and calibration bounds before starting automatic calibration.");
       const profiles = await loadAllProfiles();
       calibrationProfileGuard.value = profileResponseSignature(profiles);
       await startCenterCapture();

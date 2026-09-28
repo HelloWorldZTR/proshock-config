@@ -1,6 +1,5 @@
 import {
   ADC_MAX,
-  ANALOG_CALIBRATION_VERSION,
   AXES,
   CURVE_TYPE_PIECEWISE_LINEAR,
   Q15_ONE,
@@ -198,7 +197,8 @@ function fixedWindowEndpoint(values, highest) {
 }
 
 function addTriggerEndpointMargins(measuredReleased, measuredPressed) {
-  const measuredSpan = measuredPressed - measuredReleased;
+  const sign = Math.sign(measuredPressed - measuredReleased);
+  const measuredSpan = Math.abs(measuredPressed - measuredReleased);
   if (measuredSpan < 3) {
     return {
       rawReleased: measuredReleased,
@@ -213,22 +213,22 @@ function addTriggerEndpointMargins(measuredReleased, measuredPressed) {
     Math.max(1, Math.round(measuredSpan * TRIGGER_ENDPOINT_MARGIN_RATIO)),
   );
   return {
-    rawReleased: measuredReleased + margin,
-    rawPressed: measuredPressed - margin,
+    rawReleased: measuredReleased + sign * margin,
+    rawPressed: measuredPressed - sign * margin,
   };
 }
 
-function selectTriggerPeakWindow(samples, releasedBaseline) {
+function selectTriggerPeakWindow(samples, releasedBaseline, signs) {
   const maxima = [0, 1].map((triggerIndex) => Math.max(
-    ...samples.map((sample) => sample.adc[4 + triggerIndex]),
+    ...samples.map((sample) => signs[triggerIndex] * (sample.adc[4 + triggerIndex] - releasedBaseline[triggerIndex])),
   ));
-  const amplitudes = maxima.map((value, index) =>
-    Math.max(1, value - releasedBaseline[index]));
+  const amplitudes = maxima.map((value) =>
+    Math.max(1, value));
   const scored = samples.map((sample) => ({
     sample,
     score: Math.min(
-      (sample.adc[4] - releasedBaseline[0]) / amplitudes[0],
-      (sample.adc[5] - releasedBaseline[1]) / amplitudes[1],
+      signs[0] * (sample.adc[4] - releasedBaseline[0]) / amplitudes[0],
+      signs[1] * (sample.adc[5] - releasedBaseline[1]) / amplitudes[1],
     ),
   }));
   const peakSamples = scored.filter(({ score }) => score >= 0.75);
@@ -240,7 +240,8 @@ function selectTriggerPeakWindow(samples, releasedBaseline) {
     .map(({ sample }) => sample);
 }
 
-export function createTriggerCycleCapture(releasedSnapshots) {
+/** @brief Capture trigger travel in the configured direction while retaining raw counts. */
+export function createTriggerCycleCapture(releasedSnapshots, directionMask = 0) {
   const released = dedupeSnapshots(releasedSnapshots);
   if (!released.length) {
     throw new Error("Trigger cycle capture requires a released baseline.");
@@ -257,6 +258,7 @@ export function createTriggerCycleCapture(releasedSnapshots) {
     cycleSamples: [],
     pressWindows: [],
     releasedBaseline,
+    signs: [0, 1].map((index) => directionMask & (1 << (4 + index)) ? -1 : 1),
     pressThreshold: releasedNoise.map((noise) => Math.max(2, noise + 2)),
     releaseThreshold: releasedNoise,
   };
@@ -264,7 +266,7 @@ export function createTriggerCycleCapture(releasedSnapshots) {
 
 export function recordTriggerCycleSample(capture, raw) {
   const deltas = [0, 1].map((triggerIndex) =>
-    raw.adc[4 + triggerIndex] - capture.releasedBaseline[triggerIndex]);
+    capture.signs[triggerIndex] * (raw.adc[4 + triggerIndex] - capture.releasedBaseline[triggerIndex]));
   if (capture.state === "released") {
     if (deltas.every((value, index) => value >= capture.pressThreshold[index])) {
       capture.state = "pressed";
@@ -275,7 +277,7 @@ export function recordTriggerCycleSample(capture, raw) {
 
   if (deltas.every((value, index) => value <= capture.releaseThreshold[index])) {
     capture.pressWindows.push(
-      selectTriggerPeakWindow(capture.cycleSamples, capture.releasedBaseline),
+      selectTriggerPeakWindow(capture.cycleSamples, capture.releasedBaseline, capture.signs),
     );
     capture.state = "released";
     capture.cycleSamples = [];
@@ -648,7 +650,7 @@ export function normalizedAxis(raw, calibration, axisInvert) {
 
 export function normalizedTrigger(raw, calibration) {
   const span = calibration.raw_pressed - calibration.raw_released;
-  if (span <= 0) {
+  if (span === 0) {
     return 0;
   }
   return Math.max(0, Math.min(1, (raw - calibration.raw_released) / span));
@@ -787,7 +789,7 @@ export function estimateStickCoverage(
   return counts;
 }
 
-export function analyzeTriggers(releasedSnapshots, pressWindows) {
+export function analyzeTriggers(releasedSnapshots, pressWindows, directionMask = 0) {
   const released = dedupeSnapshots(releasedSnapshots);
   if (released.length < CENTER_SAMPLE_COUNT) {
     throw new Error(`Trigger release requires ${CENTER_SAMPLE_COUNT} unique samples.`);
@@ -806,8 +808,9 @@ export function analyzeTriggers(releasedSnapshots, pressWindows) {
     ));
     const measuredPressed = Math.round(median(pressMedians));
     const dispersion = Math.max(...pressMedians) - Math.min(...pressMedians);
-    if (measuredReleased >= measuredPressed) {
-      throw new Error(`${triggerIndex ? "R2" : "L2"} direction is reversed.`);
+    const sign = directionMask & (1 << (4 + triggerIndex)) ? -1 : 1;
+    if (sign * (measuredPressed - measuredReleased) <= 0) {
+      throw new Error(`${triggerIndex ? "R2" : "L2"} direction does not match Hardware directions.`);
     }
     if (dispersion > ADC_MAX * 0.03) {
       throw new Error(`${triggerIndex ? "R2" : "L2"} full-press dispersion exceeds 3%.`);
@@ -828,7 +831,6 @@ export function analyzeTriggers(releasedSnapshots, pressWindows) {
 
 export function buildCalibrationDraft(base, neutral, leftRange, rightRange, triggers) {
   const draft = cloneConfigData(base);
-  draft.calibration_version = ANALOG_CALIBRATION_VERSION;
   [...leftRange.axis, ...rightRange.axis].forEach((axis, index) => {
     draft.axis[index] = { ...axis };
   });
@@ -847,6 +849,12 @@ export function buildCalibrationDraft(base, neutral, leftRange, rightRange, trig
 
 export function validateCalibration(calibration) {
   const failures = [];
+  if (![1, 2].includes(calibration.calibration_version) || calibration.flags !== 0) {
+    failures.push("Unsupported calibration version or flags.");
+  }
+  if (calibration.calibration_version === 2 && (!Number.isInteger(calibration.direction_mask) || calibration.direction_mask < 0 || calibration.direction_mask > 63)) {
+    failures.push("Analog direction mask must be 0..63.");
+  }
   const channels = [...calibration.axis.flatMap((axis) => [axis.raw_min, axis.raw_center, axis.raw_max]), ...calibration.trigger.flatMap((trigger) => [trigger.raw_released, trigger.raw_pressed])];
   if (channels.some((value) => !Number.isInteger(value) || value < 0 || value > 4095)) {
     failures.push("ADC endpoints must be whole numbers from 0 to 4095.");
@@ -868,8 +876,9 @@ export function validateCalibration(calibration) {
       }
     });
   });
-  calibration.trigger.forEach((trigger) => {
-    if (trigger.raw_pressed <= trigger.raw_released) {
+  calibration.trigger.forEach((trigger, index) => {
+    const sign = calibration.calibration_version >= 2 && (calibration.direction_mask & (1 << (4 + index))) ? -1 : 1;
+    if (sign * (trigger.raw_pressed - trigger.raw_released) < 1) {
       failures.push(`${trigger.name}: released/pressed direction or span is invalid`);
     }
   });

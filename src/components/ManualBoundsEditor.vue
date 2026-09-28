@@ -3,21 +3,22 @@
     <header class="page-heading">
       <h1>Manual settings</h1>
       <p>Device-level · Affects all Profiles.</p>
-      <p>Stick bounds must stay at least 128 ADC counts from center. The released trigger endpoint must be below the pressed endpoint.</p>
+      <p>Stick bounds must stay at least 128 ADC counts from center. Trigger endpoints are actual ADC readings at release and full press; their order follows Hardware directions.</p>
     </header>
+    <slot name="directions"></slot>
     <section v-for="group in groups" :key="group.label" class="bounds-group">
       <h2>{{ group.label }}</h2>
       <div class="bounds-table" role="table" :aria-label="group.label">
         <div class="bounds-row bounds-labels" role="row"><span role="columnheader">Input</span><span role="columnheader">{{ group.kind === 'axis' ? 'Lower bound' : 'Released endpoint' }}</span><span role="columnheader">{{ group.kind === 'axis' ? 'Center' : '—' }}</span><span role="columnheader">{{ group.kind === 'axis' ? 'Upper bound' : 'Pressed endpoint' }}</span></div>
         <div v-for="index in group.indices" :key="index" class="bounds-row" role="row">
           <strong role="rowheader">{{ calibration[group.kind][index].name }}</strong>
-          <label role="cell"><span class="visually-hidden">{{ calibration[group.kind][index].name }} {{ group.kind === 'axis' ? 'Lower bound' : 'Released endpoint' }}</span><input :aria-label="`${calibration[group.kind][index].name} Lower bound`" type="number" min="0" max="4095" step="1" :value="calibration[group.kind][index][group.kind === 'axis' ? 'raw_min' : 'raw_released']" @input="update($event, group.kind, index, group.kind === 'axis' ? 'raw_min' : 'raw_released')"></label>
+          <label role="cell"><span class="visually-hidden">{{ calibration[group.kind][index].name }} {{ group.kind === 'axis' ? 'Lower bound' : 'Released endpoint' }}</span><input :aria-label="`${calibration[group.kind][index].name} ${group.kind === 'axis' ? 'Lower bound' : 'Released endpoint'}`" type="number" min="0" max="4095" step="1" :value="calibration[group.kind][index][group.kind === 'axis' ? 'raw_min' : 'raw_released']" @input="update($event, group.kind, index, group.kind === 'axis' ? 'raw_min' : 'raw_released')"></label>
           <label v-if="group.kind === 'axis'" role="cell">
             <span class="visually-hidden">{{ calibration.axis[index].name }} Center</span>
             <input :aria-label="`${calibration.axis[index].name} Center`" type="number" min="0" max="4095" step="1" :value="calibration.axis[index].raw_center" @input="update($event, 'axis', index, 'raw_center')">
           </label>
           <span v-else role="cell" class="bounds-center">—</span>
-          <label role="cell"><span class="visually-hidden">{{ calibration[group.kind][index].name }} {{ group.kind === 'axis' ? 'Upper bound' : 'Pressed endpoint' }}</span><input :aria-label="`${calibration[group.kind][index].name} Upper bound`" type="number" min="0" max="4095" step="1" :value="calibration[group.kind][index][group.kind === 'axis' ? 'raw_max' : 'raw_pressed']" @input="update($event, group.kind, index, group.kind === 'axis' ? 'raw_max' : 'raw_pressed')"></label>
+          <label role="cell"><span class="visually-hidden">{{ calibration[group.kind][index].name }} {{ group.kind === 'axis' ? 'Upper bound' : 'Pressed endpoint' }}</span><input :aria-label="`${calibration[group.kind][index].name} ${group.kind === 'axis' ? 'Upper bound' : 'Pressed endpoint'}`" type="number" min="0" max="4095" step="1" :value="calibration[group.kind][index][group.kind === 'axis' ? 'raw_max' : 'raw_pressed']" @input="update($event, group.kind, index, group.kind === 'axis' ? 'raw_max' : 'raw_pressed')"></label>
         </div>
       </div>
     </section>
