@@ -1,5 +1,6 @@
 <template>
   <aside
+    v-if="!riskWarningDismissed"
     class="competitive-risk-warning"
     role="note"
     aria-label="Online-play ban risk"
@@ -10,9 +11,13 @@
       <strong>Online-play ban risk</strong>
       <p>Macros and RC filtering may violate game or tournament rules. Use them at your own risk; account bans are your responsibility.</p>
     </div>
+    <button class="risk-warning-dismiss" type="button" aria-label="Dismiss" @click="riskWarningDismissed = true">
+      <X aria-hidden="true" />
+    </button>
   </aside>
 </template>
 
 <script setup>
-import { ShieldAlert } from "@lucide/vue";
+import { ShieldAlert, X } from "@lucide/vue";
+import { riskWarningDismissed } from "../risk-warning-state.js";
 </script>

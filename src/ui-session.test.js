@@ -94,3 +94,80 @@ test('manual centers accept edits and enforce the 128 ADC boundary on both sides
     assert.equal(run('canApply.value'), valid);
   }
 });
+
+test('shape edits during Apply survive and remain unapplied', async () => {
+  const run = harness();
+  run(`connected.value = true; configInfo.value = {dirty:false,boot_profile:0};
+    setStickShape({stickIndex:0,sector:0,scaleQ15:28000});
+    let releaseProfile; let submittedProfile;
+    writeProfileValue = value => { submittedProfile = clone(value); return new Promise(resolve => {releaseProfile = resolve;}); };
+    pollAnalogSnapshot = async () => {};`);
+  const applying = run('applyDraft()');
+  run('setStickShape({stickIndex:0,sector:0,scaleQ15:24000}); releaseProfile(submittedProfile)');
+  await applying;
+  assert.equal(run('profileDraft.value.stick_shape[0].scale_q15[0]'), 24000);
+  assert.equal(run('profileBackup.value.stick_shape[0].scale_q15[0]'), 28000);
+  assert.equal(run('profileChanged.value'), true);
+});
+
+test('physical calibration edits during a write survive and remain unapplied', async () => {
+  const run = harness();
+  run(`let releaseCalibration; let submittedCalibration;
+    writeCalibrationValue = value => {submittedCalibration = clone(value); return new Promise(resolve => {releaseCalibration = resolve;});};
+    calibrationDraft.value.stick[0].radius_q15[0] = 30000;`);
+  const writing = run('writeCalibration()');
+  run('calibrationDraft.value.stick[0].radius_q15[0] = 29000; releaseCalibration(submittedCalibration)');
+  await writing;
+  assert.equal(run('calibrationDraft.value.stick[0].radius_q15[0]'), 29000);
+  assert.equal(run('calibrationBackup.value.stick[0].radius_q15[0]'), 30000);
+  assert.equal(run('calibrationChanged.value'), true);
+});
+
+test('shape edits during Save remain drafts and do not enter the saved baseline', async () => {
+  const run = harness();
+  run(`connected.value = true; configInfo.value = {dirty:true,boot_profile:0};
+    profileDraft.value.stick_shape[0].scale_q15[0] = 28000;
+    profileBackup.value = clone(profileDraft.value);
+    let releaseSave;
+    command = id => id === COMMAND.SAVE_CONFIG
+      ? new Promise(resolve => {releaseSave = resolve;})
+      : Promise.resolve({payload:new Uint8Array(56)});`);
+  const saving = run('saveConfig()');
+  run('setStickShape({stickIndex:0,sector:0,scaleQ15:24000}); releaseSave({payload:new Uint8Array(16)})');
+  assert.equal(await saving, true);
+  assert.equal(run('profileDraft.value.stick_shape[0].scale_q15[0]'), 24000);
+  assert.equal(run('savedProfileBaseline.value.stick_shape[0].scale_q15[0]'), 28000);
+  assert.equal(run('profileChanged.value'), true);
+});
+
+test('normal shape Apply serializes the submitted sectors and clears the draft', async () => {
+  const run = harness();
+  run(`connected.value = true;
+    setStickShape({stickIndex:0,sector:0,scaleQ15:28000});
+    let transmitted;
+    writeChunked = async (begin, set, commit, bytes) => {
+      transmitted = new Uint8Array(bytes);
+      const payload = new Uint8Array(56); payload[7] = 1;
+      return {payload};
+    };`);
+  await run('writeProfile()');
+  assert.equal(run('parseProfile(transmitted, 0).stick_shape[0].scale_q15[0]'), 28000);
+  assert.equal(run('profileDraft.value.stick_shape[0].scale_q15[0]'), 28000);
+  assert.equal(run('profileChanged.value'), false);
+  assert.equal(run('canSave.value'), true);
+});
+
+test('shape edits during color Apply are not marked as applied', async () => {
+  const run = harness();
+  run(`profileDraft.value.color_rgb = [10,20,30];
+    let releaseColor;
+    command = () => new Promise(resolve => {releaseColor = resolve;});`);
+  const applying = run('writeProfileColor()');
+  run(`setStickShape({stickIndex:0,sector:0,scaleQ15:24000});
+    const payload = new Uint8Array(56); payload[7] = 1; releaseColor({payload});`);
+  await applying;
+  assert.equal(run('profileDraft.value.stick_shape[0].scale_q15[0]'), 24000);
+  assert.equal(run('profileBackup.value.stick_shape[0].scale_q15[0]'), 32768);
+  assert.equal(run('profileBackup.value.color_rgb.join(",")'), '10,20,30');
+  assert.equal(run('profileChanged.value'), true);
+});

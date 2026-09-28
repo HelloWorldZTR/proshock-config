@@ -30,7 +30,6 @@
 .debounce-inputs > button { height: 38px; white-space: nowrap; }
 .debounce-control .field-error { grid-column: 2; margin: 8px 0 0; }
 .calibration-workspace > .page { width: 100%; min-height: 0; margin: 0; padding: 0; }
-.shape-stick-switch button.active { border-color: var(--accent); color: var(--accent); background: #142d3b; }
 .manual-bounds-page { max-width: 1200px; }
 .bounds-group { border-top: 1px solid var(--border); padding: 18px 0; }
 .bounds-group h2 { font-size: 16px; margin-bottom: 12px; }
@@ -41,8 +40,6 @@
 .advanced-canvas .shape-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 18px; }
 .shape-heading h1 { margin-bottom: 6px; }
 .shape-heading p { margin: 0; font-size: 14px; }
-.shape-stick-switch { display: flex; gap: 8px; flex-shrink: 0; }
-.shape-stick-switch button { min-height: 38px; font-size: 14px; }
 .shape-editor-panel { display: grid; grid-template-columns: minmax(300px, 460px) minmax(280px, 1fr); gap: 22px 32px; max-width: 1140px; }
 .shape-chart-column { min-width: 0; }
 .shape-workspace .roundness-drag-chart { max-width: 400px; margin-inline: auto; }

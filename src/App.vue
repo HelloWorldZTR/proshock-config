@@ -970,9 +970,15 @@ async function writeCalibrationValue(value) {
   return parseAnalogCalibration(bytes);
 }
 
+/** @brief Apply a calibration snapshot while preserving newer edits. */
 async function writeCalibration() {
-  calibrationDraft.value = await writeCalibrationValue(calibrationDraft.value);
-  calibrationBackup.value = clone(calibrationDraft.value);
+  const submitted = clone(calibrationDraft.value);
+  const applied = await writeCalibrationValue(submitted);
+  // Edits made while USB is busy belong to the next Apply.
+  if (JSON.stringify(calibrationDraft.value) === JSON.stringify(submitted)) {
+    calibrationDraft.value = applied;
+  }
+  calibrationBackup.value = clone(applied);
   appliedChangeKinds.value = {
     ...appliedChangeKinds.value,
     calibration: true,
@@ -995,40 +1001,51 @@ async function writeProfileValue(value, profileIndex) {
   return parseProfile(bytes, profileIndex);
 }
 
+/** @brief Apply a Profile snapshot without replacing edits made in flight. */
 async function writeProfile() {
-  profileDraft.value = await writeProfileValue(
-    profileDraft.value,
+  const submitted = clone(profileDraft.value);
+  const applied = await writeProfileValue(
+    submitted,
     selectedProfile.value,
   );
-  profileBackup.value = clone(profileDraft.value);
+  if (JSON.stringify(profileDraft.value) === JSON.stringify(submitted)) {
+    profileDraft.value = applied;
+  }
+  profileBackup.value = clone(applied);
   appliedChangeKinds.value = {
     ...appliedChangeKinds.value,
     profile: true,
   };
 }
 
+/** @brief Apply the submitted color and retain concurrent Profile edits. */
 async function writeProfileColor() {
+  const submitted = clone(profileDraft.value);
   const packet = await command(
     COMMAND.SET_PROFILE_COLOR,
-    makeProfileColorPayload(selectedProfile.value, profileDraft.value.color_rgb),
+    makeProfileColorPayload(selectedProfile.value, submitted.color_rgb),
   );
   configInfo.value = parseConfigInfo(packet.payload);
-  const bytes = new Uint8Array(profileDraft.value.raw);
-  writeProfileDraftToPayload(bytes, profileDraft.value);
-  profileDraft.value = parseProfile(bytes, selectedProfile.value);
-  profileBackup.value = clone(profileDraft.value);
+  const bytes = new Uint8Array(submitted.raw);
+  writeProfileDraftToPayload(bytes, submitted);
+  const applied = parseProfile(bytes, selectedProfile.value);
+  if (JSON.stringify(profileDraft.value) === JSON.stringify(submitted)) {
+    profileDraft.value = applied;
+  }
+  profileBackup.value = clone(applied);
   appliedChangeKinds.value = {
     ...appliedChangeKinds.value,
     profile: true,
   };
 }
 
+/** @brief Capture only configuration acknowledged by the controller. */
 function captureSavedBaselines(available = true) {
-  savedProfileBaseline.value = profileDraft.value
-    ? clone(profileDraft.value)
+  savedProfileBaseline.value = profileBackup.value
+    ? clone(profileBackup.value)
     : null;
-  savedCalibrationBaseline.value = calibrationDraft.value
-    ? clone(calibrationDraft.value)
+  savedCalibrationBaseline.value = calibrationBackup.value
+    ? clone(calibrationBackup.value)
     : null;
   savedGlobalBaseline.value = configInfo.value
     ? {
@@ -1210,6 +1227,7 @@ function requestProfileSwitch(index) {
   }, { targetProfile: index });
 }
 
+/** @brief Apply pending configuration without treating later edits as applied. */
 async function applyDraft() {
   if (!canApply.value) return false;
   return runBusyOperation(async () => {
@@ -1230,7 +1248,6 @@ async function applyDraft() {
         else await writeProfile();
       }
       if (calibrationChanged.value) await writeCalibration();
-      profileBackup.value = clone(profileDraft.value);
       await pollAnalogSnapshot();
       notify("Draft applied to firmware RAM.");
       return true;
@@ -1242,6 +1259,7 @@ async function applyDraft() {
   });
 }
 
+/** @brief Persist applied RAM settings while preserving unsent browser drafts. */
 async function saveConfig() {
   if (!canSave.value) return false;
   saveInProgress.value = true;
@@ -1250,8 +1268,6 @@ async function saveConfig() {
     lastStatus.value = parseStatus(packet.payload);
     const infoPacket = await command(COMMAND.GET_CONFIG_INFO);
     configInfo.value = parseConfigInfo(infoPacket.payload);
-    profileBackup.value = clone(profileDraft.value);
-    calibrationBackup.value = clone(calibrationDraft.value);
     captureSavedBaselines(true);
     notify("Configuration saved and verified.");
     return true;

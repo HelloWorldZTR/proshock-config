@@ -13,13 +13,14 @@
       </div>
     </header>
     <ControllerVisual
+      v-if="!detailsOnly"
       :stick-values="stickValues"
       :trigger-values="triggerValues"
       :buttons="raw?.buttons || 0"
       :dpad-hat="raw?.dpad_hat ?? 8"
       :show-stick-readouts="!detailKind"
     />
-    <div class="activity-strip" aria-label="Button activity">
+    <div v-if="!detailsOnly" class="activity-strip" aria-label="Button activity">
       <span
         v-for="button in buttons"
         :key="button.bit"
@@ -54,6 +55,7 @@ const props = defineProps({
   axisInvert: { type: Array, default: undefined },
   sourceLabel: { type: String, default: "Processed input" },
   detailKind: { type: String, default: "" },
+  detailsOnly: { type: Boolean, default: false },
 });
 
 const buttons = [

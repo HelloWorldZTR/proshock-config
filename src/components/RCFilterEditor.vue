@@ -1,111 +1,115 @@
 <template>
   <div class="rc-page-canvas">
-    <header class="page-heading">
-      <h1>RC filter</h1>
-      <p>Shape calibrated stick motion before roundness, deadzone, and response curves.</p>
+    <header class="page-heading rc-page-heading">
+      <div>
+        <h1>RC filter</h1>
+        <p>Shape calibrated stick motion before roundness, deadzone, and response curves.</p>
+      </div>
+      <StickSwitcher v-model="selectedStick" />
     </header>
 
     <CompetitiveRiskWarning />
 
     <div class="editor-split rc-editor-split">
       <div class="rc-editor-stack">
-        <article
-          v-for="(rc, stickIndex) in stickRc"
-          :key="stickIndex"
-          class="rc-stick-card"
-        >
-          <header>
-            <div>
-              <h2>{{ stickIndex === 0 ? "Left stick" : "Right stick" }}</h2>
-            </div>
-            <span class="rc-stick-index">S{{ stickIndex + 1 }}</span>
-          </header>
-
-          <section class="rc-stage-card">
-            <div class="rc-stage-heading">
+        <StickPanelTransition :selected-stick="selectedStick">
+          <article
+            :key="selectedStick"
+            class="rc-stick-card"
+          >
+            <header>
               <div>
-                <strong>Smoothing</strong>
-                <p>Low-pass filtering removes electromagnetic high-frequency noise.</p>
+                <h2>{{ selectedStick === 0 ? "Left stick" : "Right stick" }}</h2>
               </div>
-              <label class="rc-stage-switch">
-                <input
-                  type="checkbox"
-                  role="switch"
-                  aria-label="Smoothing"
-                  :checked="hasFlag(rc, STICK_RC_FLAG_SMOOTHING)"
-                  @change="setFlag(stickIndex, STICK_RC_FLAG_SMOOTHING, $event.target.checked)"
-                >
-                <span class="rc-switch-track" aria-hidden="true"></span>
-                <span>{{ hasFlag(rc, STICK_RC_FLAG_SMOOTHING) ? "On" : "Off" }}</span>
-              </label>
-            </div>
-            <RcFrequencyControl
-              label="Smoothing cutoff"
-              :disabled="!hasFlag(rc, STICK_RC_FLAG_SMOOTHING)"
-              :alpha-q15="rc.smoothing_alpha_q15"
-              @update="setCutoff(stickIndex, 'smoothing_alpha_q15', $event)"
-            />
-          </section>
+              <span class="rc-stick-index">S{{ selectedStick + 1 }}</span>
+            </header>
 
-          <section class="rc-stage-card">
-            <div class="rc-stage-heading">
-              <div>
-                <strong>Boost</strong>
-                <p>A band-limited derivative adds motion energy without passing the highest-frequency calculation jitter.</p>
+            <section class="rc-stage-card">
+              <div class="rc-stage-heading">
+                <div>
+                  <strong>Smoothing</strong>
+                  <p>Low-pass filtering removes electromagnetic high-frequency noise.</p>
+                </div>
+                <label class="rc-stage-switch">
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    aria-label="Smoothing"
+                    :checked="hasFlag(selectedRc, STICK_RC_FLAG_SMOOTHING)"
+                    @change="setFlag(selectedStick, STICK_RC_FLAG_SMOOTHING, $event.target.checked)"
+                  >
+                  <span class="rc-switch-track" aria-hidden="true"></span>
+                  <span>{{ hasFlag(selectedRc, STICK_RC_FLAG_SMOOTHING) ? "On" : "Off" }}</span>
+                </label>
               </div>
-              <label class="rc-stage-switch">
+              <RcFrequencyControl
+                label="Smoothing cutoff"
+                :disabled="!hasFlag(selectedRc, STICK_RC_FLAG_SMOOTHING)"
+                :alpha-q15="selectedRc.smoothing_alpha_q15"
+                @update="setCutoff(selectedStick, 'smoothing_alpha_q15', $event)"
+              />
+            </section>
+
+            <section class="rc-stage-card">
+              <div class="rc-stage-heading">
+                <div>
+                  <strong>Boost</strong>
+                  <p>A band-limited derivative adds motion energy without passing the highest-frequency calculation jitter.</p>
+                </div>
+                <label class="rc-stage-switch">
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    aria-label="Boost"
+                    :checked="hasFlag(selectedRc, STICK_RC_FLAG_BOOST)"
+                    @change="setFlag(selectedStick, STICK_RC_FLAG_BOOST, $event.target.checked)"
+                  >
+                  <span class="rc-switch-track" aria-hidden="true"></span>
+                  <span>{{ hasFlag(selectedRc, STICK_RC_FLAG_BOOST) ? "On" : "Off" }}</span>
+                </label>
+              </div>
+              <RcFrequencyControl
+                label="Fast cutoff"
+                :disabled="!hasFlag(selectedRc, STICK_RC_FLAG_BOOST)"
+                :alpha-q15="selectedRc.boost_fast_alpha_q15"
+                :minimum-hz="slowHz(selectedRc) + 1"
+                @update="setCutoff(selectedStick, 'boost_fast_alpha_q15', $event)"
+              />
+              <RcFrequencyControl
+                label="Slow cutoff"
+                :disabled="!hasFlag(selectedRc, STICK_RC_FLAG_BOOST)"
+                :alpha-q15="selectedRc.boost_slow_alpha_q15"
+                :maximum-hz="fastHz(selectedRc) - 1"
+                @update="setCutoff(selectedStick, 'boost_slow_alpha_q15', $event)"
+              />
+              <label class="rc-control-row">
+                <span>
+                  <strong>Boost gain</strong>
+                  <small>{{ gainText(selectedRc) }}</small>
+                </span>
                 <input
-                  type="checkbox"
-                  role="switch"
-                  aria-label="Boost"
-                  :checked="hasFlag(rc, STICK_RC_FLAG_BOOST)"
-                  @change="setFlag(stickIndex, STICK_RC_FLAG_BOOST, $event.target.checked)"
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.01"
+                  :disabled="!hasFlag(selectedRc, STICK_RC_FLAG_BOOST)"
+                  :value="selectedRc.boost_gain_q8_8 / 256"
+                  @input="setGain(selectedStick, $event.target.value)"
                 >
-                <span class="rc-switch-track" aria-hidden="true"></span>
-                <span>{{ hasFlag(rc, STICK_RC_FLAG_BOOST) ? "On" : "Off" }}</span>
+                <input
+                  class="rc-number-input"
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.01"
+                  :disabled="!hasFlag(selectedRc, STICK_RC_FLAG_BOOST)"
+                  :value="(selectedRc.boost_gain_q8_8 / 256).toFixed(2)"
+                  @change="setGain(selectedStick, $event.target.value)"
+                >
               </label>
-            </div>
-            <RcFrequencyControl
-              label="Fast cutoff"
-              :disabled="!hasFlag(rc, STICK_RC_FLAG_BOOST)"
-              :alpha-q15="rc.boost_fast_alpha_q15"
-              :minimum-hz="slowHz(rc) + 1"
-              @update="setCutoff(stickIndex, 'boost_fast_alpha_q15', $event)"
-            />
-            <RcFrequencyControl
-              label="Slow cutoff"
-              :disabled="!hasFlag(rc, STICK_RC_FLAG_BOOST)"
-              :alpha-q15="rc.boost_slow_alpha_q15"
-              :maximum-hz="fastHz(rc) - 1"
-              @update="setCutoff(stickIndex, 'boost_slow_alpha_q15', $event)"
-            />
-            <label class="rc-control-row">
-              <span>
-                <strong>Boost gain</strong>
-                <small>{{ gainText(rc) }}</small>
-              </span>
-              <input
-                type="range"
-                min="0"
-                max="2"
-                step="0.01"
-                :disabled="!hasFlag(rc, STICK_RC_FLAG_BOOST)"
-                :value="rc.boost_gain_q8_8 / 256"
-                @input="setGain(stickIndex, $event.target.value)"
-              >
-              <input
-                class="rc-number-input"
-                type="number"
-                min="0"
-                max="2"
-                step="0.01"
-                :disabled="!hasFlag(rc, STICK_RC_FLAG_BOOST)"
-                :value="(rc.boost_gain_q8_8 / 256).toFixed(2)"
-                @change="setGain(stickIndex, $event.target.value)"
-              >
-            </label>
-          </section>
-        </article>
+            </section>
+          </article>
+        </StickPanelTransition>
       </div>
 
       <InputViewer
@@ -114,6 +118,7 @@
         :calibration="calibration"
         :axis-invert="axisInvert"
         detail-kind="sticks"
+        details-only
         mode="compact"
         title="Live preview"
         source-label="Firmware processed input"
@@ -123,7 +128,6 @@
     <section class="rc-frequency-section">
       <header>
         <div>
-          <p class="eyebrow">8 kHz ADC model</p>
           <h2>Frequency response</h2>
         </div>
         <span class="rc-zero-key">0 dB · unchanged amplitude</span>
@@ -164,6 +168,8 @@ import {
   cutoffHzToAlphaQ15,
   stickRcFrequencySeries,
 } from "../rc-filter.js";
+import StickSwitcher from "./StickSwitcher.vue";
+import StickPanelTransition from "./StickPanelTransition.vue";
 import CompetitiveRiskWarning from "./CompetitiveRiskWarning.vue";
 import InputViewer from "./InputViewer.vue";
 import RcFrequencyControl from "./RcFrequencyControl.vue";
@@ -187,6 +193,7 @@ const props = defineProps({
   axisInvert: { type: Array, default: undefined },
 });
 const emit = defineEmits(["update"]);
+const selectedStick = ref(0);
 const chartCanvas = ref(null);
 let chart = null;
 
@@ -194,6 +201,8 @@ const stickRc = computed(() => props.profile?.stick_rc || [
   createDefaultStickRc(),
   createDefaultStickRc(),
 ]);
+
+const selectedRc = computed(() => stickRc.value[selectedStick.value]);
 
 function hasFlag(rc, flag) {
   return (rc.flags & flag) !== 0;
@@ -236,6 +245,7 @@ function setGain(stickIndex, gain) {
   emitRc(stickIndex, value);
 }
 
+/** @brief Build response curves for the selected stick and the 0 dB guide. */
 function responseDatasets() {
   const colors = ["#55d6ff", "#ffb020"];
   const stageStyle = {
@@ -243,8 +253,8 @@ function responseDatasets() {
     Boost: { borderDash: [8, 4], borderWidth: 1.4 },
     Final: { borderDash: [], borderWidth: 2.5 },
   };
-  const datasets = stickRcFrequencySeries(stickRc.value).map((series) => {
-    const stickIndex = series.stickIndex;
+  const datasets = stickRcFrequencySeries([stickRc.value[selectedStick.value]]).map((series) => {
+    const stickIndex = selectedStick.value;
     const prefix = translate(stickIndex === 0 ? "Left stick" : "Right stick");
     return {
       label: `${prefix} · ${translate(series.stage)}`,
@@ -313,6 +323,6 @@ onMounted(() => {
   });
 });
 
-watch([() => props.profile?.stick_rc, currentLocale], updateChart, { deep: true });
+watch([() => props.profile?.stick_rc, selectedStick, currentLocale], updateChart, { deep: true });
 onUnmounted(() => chart?.destroy());
 </script>

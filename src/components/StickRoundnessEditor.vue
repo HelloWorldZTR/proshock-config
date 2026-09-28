@@ -2,117 +2,121 @@
   <section class="roundness-editor shape-workspace">
     <header class="shape-heading">
       <div><h1>Stick shape</h1><p>Current Profile · Edit, apply, then test.</p></div>
-      <div class="shape-stick-switch" aria-label="Stick selection"><button v-for="(stick, index) in sticks" :key="index" type="button" :class="{ active: selectedStick === index }" :aria-pressed="selectedStick === index" @click="selectedStick = index">{{ stick.label }}</button></div>
+      <StickSwitcher v-model="selectedStick" />
     </header>
-    <article v-for="(stick, stickIndex) in sticks" v-show="selectedStick === stickIndex" :key="stickIndex" class="shape-editor-panel">
-      <div class="shape-chart-column">
-          <svg
-            class="roundness-drag-chart"
-            viewBox="-140 -140 280 280"
-            role="application"
-            :aria-label="`${stick.label} draggable roundness chart`"
-            @pointerdown="startDrag($event, stickIndex)"
-            @pointermove="continueDrag"
-            @pointerup="endDrag"
-            @pointercancel="endDrag"
-          >
-            <circle cx="0" cy="0" r="105" class="roundness-tolerance-guide" />
-            <circle cx="0" cy="0" r="100" class="roundness-standard-circle" />
-            <circle cx="0" cy="0" r="95" class="roundness-tolerance-guide" />
-            <line
-              v-for="sector in sectorIndexes"
-              :key="`spoke-${sector}`"
-              x1="0"
-              y1="0"
-              :x2="polarPoint(1.25, sector).x"
-              :y2="polarPoint(1.25, sector).y"
-              class="roundness-sector-spoke"
-            />
-            <polygon :points="targetTrace(stickIndex)" class="roundness-target-shape" />
+    <StickPanelTransition :selected-stick="selectedStick">
+      <article :key="selectedStick" class="shape-editor-panel">
+        <div class="shape-chart-column">
+            <svg
+              class="roundness-drag-chart"
+              viewBox="-140 -140 280 280"
+              role="application"
+              :aria-label="`${sticks[selectedStick].label} draggable roundness chart`"
+              @pointerdown="startDrag($event, selectedStick)"
+              @pointermove="continueDrag"
+              @pointerup="endDrag"
+              @pointercancel="endDrag"
+            >
+              <circle cx="0" cy="0" r="105" class="roundness-tolerance-guide" />
+              <circle cx="0" cy="0" r="100" class="roundness-standard-circle" />
+              <circle cx="0" cy="0" r="95" class="roundness-tolerance-guide" />
+              <line
+                v-for="sector in sectorIndexes"
+                :key="`spoke-${sector}`"
+                x1="0"
+                y1="0"
+                :x2="polarPoint(1.25, sector).x"
+                :y2="polarPoint(1.25, sector).y"
+                class="roundness-sector-spoke"
+              />
+              <polygon :points="targetTrace(selectedStick)" class="roundness-target-shape" />
 
-            <polygon
-              v-if="captureResult(stickIndex).complete"
-              :points="measuredTrace(stickIndex)"
-              class="roundness-measured-fill"
-              :class="captureResult(stickIndex).pass ? 'good' : 'bad'"
-            />
-            <line
-              v-for="segment in measuredSegments(stickIndex)"
-              :key="segment.key"
-              :x1="segment.from.x"
-              :y1="segment.from.y"
-              :x2="segment.to.x"
-              :y2="segment.to.y"
-              class="roundness-measured-segment"
-              :class="segment.status"
-            />
-            <circle
-              v-for="point in measuredPoints(stickIndex)"
-              :key="`measured-${point.sector}`"
-              :cx="point.x"
-              :cy="point.y"
-              r="3.5"
-              class="roundness-measured-point"
-              :class="point.status"
-            />
+              <polygon
+                v-if="captureResult(selectedStick).complete"
+                :points="measuredTrace(selectedStick)"
+                class="roundness-measured-fill"
+                :class="captureResult(selectedStick).pass ? 'good' : 'bad'"
+              />
+              <line
+                v-for="segment in measuredSegments(selectedStick)"
+                :key="segment.key"
+                :x1="segment.from.x"
+                :y1="segment.from.y"
+                :x2="segment.to.x"
+                :y2="segment.to.y"
+                class="roundness-measured-segment"
+                :class="segment.status"
+              />
+              <circle
+                v-for="point in measuredPoints(selectedStick)"
+                :key="`measured-${point.sector}`"
+                :cx="point.x"
+                :cy="point.y"
+                r="3.5"
+                class="roundness-measured-point"
+                :class="point.status"
+              />
 
-            <circle
-              v-for="sector in sectorIndexes"
-              :key="`handle-${sector}`"
-              :cx="handlePoint(stickIndex, sector).x"
-              :cy="handlePoint(stickIndex, sector).y"
-              r="6"
-              tabindex="0"
-              role="slider"
-              :aria-label="`${stick.label} shape sector ${sector}`"
-              :aria-valuemin="0"
-              :aria-valuemax="65535"
-              :aria-valuenow="sectorValue(stickIndex, sector)"
-              class="roundness-drag-handle"
-              @keydown.stop="adjustWithKeyboard($event, stickIndex, sector)"
-            />
-            <circle
-              :cx="livePoint(stickIndex).x"
-              :cy="livePoint(stickIndex).y"
-              r="4.5"
-              class="roundness-live-point"
-            />
-          </svg>
-        <div class="roundness-legend" aria-label="Roundness chart legend"><span class="target">Slot target</span><span class="standard">Standard circle</span><span class="good">Measured · within ±5%</span><span class="bad">Measured · outside ±5%</span></div>
-      </div>
-      <aside class="shape-controls">
-        <section><h2>Shape presets</h2><div class="roundness-preset-row"><button v-for="preset in presets" :key="preset.id" type="button" :class="{ active: activePreset(stickIndex) === preset.id }" @click="selectPreset(stickIndex, preset.id)">{{ preset.label }}</button></div></section>
-        <section class="shape-test-section">
-          <header><h2>Device test</h2><span class="roundness-result-badge" :class="resultClass(stickIndex)">{{ resultLabel(stickIndex) }}</span></header>
-          <p>{{ canTest ? 'Rotate the selected stick around its outer edge.' : 'Connect and apply pending changes before testing.' }}</p>
-          <div class="roundness-test-actions"><button type="button" :disabled="!canTest" :class="{ active: testActive }" @click="toggleTest">{{ testActive ? 'Stop actual test' : 'Start actual test' }}</button><button type="button" :disabled="!hasSamples" @click="clearStickCapture(stickIndex)">Clear trace</button></div>
-          <dl class="roundness-test-summary"><div><dt>Coverage</dt><dd>{{ captureResult(stickIndex).coverage }}/16</dd></div><div><dt>Target error</dt><dd>{{ formatError(captureResult(stickIndex).errorPercent) }}</dd></div><div><dt>Live radius</dt><dd>{{ canTest ? liveRadius(stickIndex) : '—' }}</dd></div><div><dt>Adjusted sectors</dt><dd>{{ changedSectorCount(stickIndex) }}/16</dd></div></dl>
-        </section>
-      </aside>
-        <details class="roundness-precision-values">
-          <summary>Precise sector values</summary>
-          <p>Post-flip coordinates: S0 right · S4 down · S8 left · S12 up. Q1.15 neutral is 32768.</p>
-          <div class="roundness-raw-grid">
-            <label v-for="sector in sectorIndexes" :key="sector">
-              <span><b>S{{ sector }}</b><small>{{ sectorDirection(sector) }}</small></span>
-              <input
-                type="number"
-                min="0"
-                max="65535"
-                step="1"
-                :aria-label="`${stick.label} sector ${sector} raw value`"
-                :value="sectorValue(stickIndex, sector)"
-                @input="updateSector(stickIndex, sector, $event.target.value)"
-              >
-            </label>
-          </div>
-        </details>
-    </article>
+              <circle
+                v-for="sector in sectorIndexes"
+                :key="`handle-${sector}`"
+                :cx="handlePoint(selectedStick, sector).x"
+                :cy="handlePoint(selectedStick, sector).y"
+                r="6"
+                tabindex="0"
+                role="slider"
+                :aria-label="`${sticks[selectedStick].label} shape sector ${sector}`"
+                :aria-valuemin="0"
+                :aria-valuemax="65535"
+                :aria-valuenow="sectorValue(selectedStick, sector)"
+                class="roundness-drag-handle"
+                @keydown.stop="adjustWithKeyboard($event, selectedStick, sector)"
+              />
+              <circle
+                :cx="livePoint(selectedStick).x"
+                :cy="livePoint(selectedStick).y"
+                r="4.5"
+                class="roundness-live-point"
+              />
+            </svg>
+          <div class="roundness-legend" aria-label="Roundness chart legend"><span class="target">Slot target</span><span class="standard">Standard circle</span><span class="good">Measured · within ±5%</span><span class="bad">Measured · outside ±5%</span></div>
+        </div>
+        <aside class="shape-controls">
+          <section><h2>Shape presets</h2><div class="roundness-preset-row"><button v-for="preset in presets" :key="preset.id" type="button" :class="{ active: activePreset(selectedStick) === preset.id }" @click="selectPreset(selectedStick, preset.id)">{{ preset.label }}</button></div></section>
+          <section class="shape-test-section">
+            <header><h2>Device test</h2><span class="roundness-result-badge" :class="resultClass(selectedStick)">{{ resultLabel(selectedStick) }}</span></header>
+            <p>{{ canTest ? 'Rotate the selected stick around its outer edge.' : 'Connect and apply pending changes before testing.' }}</p>
+            <div class="roundness-test-actions"><button type="button" :disabled="!canTest" :class="{ active: testActive }" @click="toggleTest">{{ testActive ? 'Stop actual test' : 'Start actual test' }}</button><button type="button" :disabled="!hasSamples" @click="clearStickCapture(selectedStick)">Clear trace</button></div>
+            <dl class="roundness-test-summary"><div><dt>Coverage</dt><dd>{{ captureResult(selectedStick).coverage }}/16</dd></div><div><dt>Target error</dt><dd>{{ formatError(captureResult(selectedStick).errorPercent) }}</dd></div><div><dt>Live radius</dt><dd>{{ canTest ? liveRadius(selectedStick) : '—' }}</dd></div><div><dt>Adjusted sectors</dt><dd>{{ changedSectorCount(selectedStick) }}/16</dd></div></dl>
+          </section>
+        </aside>
+          <details class="roundness-precision-values">
+            <summary>Precise sector values</summary>
+            <p>Post-flip coordinates: S0 right · S4 down · S8 left · S12 up. Q1.15 neutral is 32768.</p>
+            <div class="roundness-raw-grid">
+              <label v-for="sector in sectorIndexes" :key="sector">
+                <span><b>S{{ sector }}</b><small>{{ sectorDirection(sector) }}</small></span>
+                <input
+                  type="number"
+                  min="0"
+                  max="65535"
+                  step="1"
+                  :aria-label="`${sticks[selectedStick].label} sector ${sector} raw value`"
+                  :value="sectorValue(selectedStick, sector)"
+                  @input="updateSector(selectedStick, sector, $event.target.value)"
+                >
+              </label>
+            </div>
+          </details>
+      </article>
+    </StickPanelTransition>
   </section>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import StickSwitcher from "./StickSwitcher.vue";
+import StickPanelTransition from "./StickPanelTransition.vue";
 import { Q15_ONE, ROUNDNESS_SECTOR_COUNT } from "../protocol.js";
 import {
   USER_SHAPE_Q15_DEFAULT,
