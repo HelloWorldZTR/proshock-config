@@ -69,11 +69,8 @@
           </button>
         </div>
       </div>
-      <span v-if="connected" class="header-settings-status" aria-live="polite">{{ settingsLabel }}</span>
-      <button v-if="showApply" type="button" class="header-apply primary" :disabled="applyState?.disabled" :aria-busy="busy" @click="emit('apply')">Apply</button>
-      <button v-if="connected" type="button" class="header-save" :disabled="!canSave" @click="emit('save')">{{ saving ? 'Saving…' : 'Save' }}</button>
       <button
-        v-if="!connected"
+        v-if="!connected || !settingsInFooter"
         type="button"
         class="header-state-action"
         :class="`state-${state.mode}`"
@@ -155,11 +152,10 @@ const props = defineProps({
   disconnecting: { type: Boolean, default: false },
   currentPage: { type: String, default: "home" },
   state: { type: Object, required: true },
-  showApply: Boolean, applyState: Object, canSave: Boolean, saving: Boolean, settingsLabel: String, allowOffline: Boolean,
+  settingsInFooter: Boolean, allowOffline: Boolean,
   iapActive: { type: Boolean, default: false },
 });
 const emit = defineEmits([
-  "apply", "save",
   "navigate",
   "profile-select",
   "primary-action",
@@ -230,7 +226,9 @@ function navigate(page) {
   emit("navigate", page);
 }
 
+/** @brief Dispatch the current settings or connection action once. */
 function emitPrimaryAction() {
+  if (props.state.disabled || !props.state.action) return;
   languageOpen.value = false;
   profileOpen.value = false;
   moreOpen.value = false;

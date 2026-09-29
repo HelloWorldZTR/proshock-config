@@ -11,8 +11,6 @@
 .gate-error, .field-error { color: var(--danger); font-size: 13px; }
 .dev-preview-banner { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; align-items: center; background: #302511; padding: 8px 16px; color: #f3cd88; font-size: 12px; }
 .dev-preview-banner button { font-size: 12px; min-height: 28px; }
-.header-settings-status { font-size: 11px; color: var(--secondary); white-space: nowrap; }
-.header-apply, .header-save { min-width: 58px; padding-inline: 10px; white-space: nowrap; }
 .system-settings { --system-label-width: 240px; }
 .system-group { border-top: 1px solid var(--border); padding: 22px 0; }
 .system-group h2 { font-size: 16px; margin: 0 0 16px; }

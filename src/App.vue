@@ -14,13 +14,8 @@
       :disconnecting="disconnecting"
       :current-page="iapMode ? 'firmware' : page"
       :state="headerState"
-      :show-apply="showSettingsApply"
-      :apply-state="configuratorApplyState"
-      :can-save="canSave && !calibrationOwnsHeaderActions"
-      :saving="saveInProgress"
-      :settings-label="stateLabel"
+      :settings-in-footer="settingsFooterVisible"
       :allow-offline="developmentPreview"
-      @apply="applyDraft" @save="saveConfig"
       :iap-active="iapMode"
       @navigate="requestPageNavigation"
       @profile-select="requestProfileSwitch"
@@ -52,7 +47,7 @@
       :calibration="calibrationDraft || defaultCalibration" :config-info="configInfo"
       :connected="connected" :read-digital-input="getDigitalInput"
       :direction-disabled="busy || saveInProgress || calibrationOwnsHeaderActions" @direction="setAnalogDirection"
-      :apply-state="configuratorApplyState"
+      :action-state="settingsActionState"
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
       @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event" @ribbon-mode="setRibbonMode" @adc-bits="setAdcBits"
       @debounce-validity="debounceValid = $event"
@@ -60,15 +55,15 @@
       @response="setResponse" @resolver="setResolver" @button-debounce="setButtonDebounce"
       @stick-shape="setStickShape" @stick-rc="setStickRc"
       @reset-curves="resetCurves" @copy-curve="copyCurve"
-      @calibrate="requestGo('calibration')" @apply="applyDraft"
+      @calibrate="requestGo('calibration')" @primary-action="handleHeaderAction"
     />
-    <div v-else-if="page === 'calibration' && !iapMode" class="page calibration-workspace">
+    <div v-else-if="page === 'calibration' && !iapMode" class="page calibration-workspace" :class="{ 'settings-footer-page': settingsFooterVisible }">
       <nav class="subtabs" aria-label="Calibration sections">
         <button type="button" :class="{ active: calibrationSection === 'automatic' }" :disabled="calibrationOwnsHeaderActions" @click="requestGo('calibration', 'automatic')">Automatic calibration</button>
         <button type="button" :class="{ active: calibrationSection === 'manual' }" :disabled="calibrationOwnsHeaderActions" @click="requestGo('calibration', 'manual')">Manual settings</button>
       </nav>
       <div v-if="calibrationSection === 'manual'" class="page manual-bounds-page">
-        <ManualBoundsEditor :calibration="calibrationDraft || defaultCalibration" :errors="calibrationValidation.failures" :apply-state="configuratorApplyState" :state-label="stateLabel" @update="setCalibrationBound" @apply="applyDraft">
+        <ManualBoundsEditor :calibration="calibrationDraft || defaultCalibration" :errors="calibrationValidation.failures" :action-state="settingsActionState" :state-label="stateLabel" @update="setCalibrationBound" @primary-action="handleHeaderAction">
           <template #directions>
             <AnalogDirectionEditor :calibration="calibrationDraft || defaultCalibration" :raw="latestRaw" :legacy-axis-invert="configInfo?.axis_invert" :disabled="busy || saveInProgress || calibrationOwnsHeaderActions" @direction="setAnalogDirection" />
           </template>
@@ -136,7 +131,6 @@ import {
   HEADER_ACTION,
   LEAVE_GUARD_KIND,
   deriveCalibrationGuardPending,
-  deriveConfiguratorApplyState,
   deriveHeaderState,
   deriveLeaveGuardKind,
   shouldGuardNavigation,
@@ -408,12 +402,6 @@ const canApply = computed(() => (
   && applyValid.value
 ));
 const canSave = computed(() => connected.value && !busy.value && !saveInProgress.value && !!configInfo.value?.dirty && !hasDraft.value);
-const configuratorApplyState = computed(() => deriveConfiguratorApplyState({
-  connected: connected.value,
-  busy: busy.value || saveInProgress.value || calibrationOwnsHeaderActions.value,
-  hasApplyDraft: hasApplyDraft.value,
-  applyValid: applyValid.value,
-}));
 const calibrationWorkflowPending = computed(() => (
   page.value === "calibration" && calibrationSection.value === "automatic"
   && [
@@ -450,10 +438,15 @@ const headerState = computed(() => deriveHeaderState({
   hasApplyDraft: hasApplyDraft.value,
   applyValid: applyValid.value,
   ramDirty: !!configInfo.value?.dirty,
-  calibrationOwnsActions: calibrationOwnsHeaderActions.value,
+  calibrationOwnsActions: calibrationOwnsHeaderActions.value
+    || (calibrationChanged.value && !calibrationDraftCanApply.value),
   hasUnsaved: hasUnsaved.value,
 }));
-const showSettingsApply = computed(() => !iapMode.value && (page.value === "configurator" || (page.value === "calibration" && calibrationSection.value === "manual")));
+const settingsFooterVisible = computed(() => !iapMode.value && (page.value === "configurator" || (page.value === "calibration" && calibrationSection.value === "manual")));
+// The footer uses the same action as the header; offline connection stays in the header.
+const settingsActionState = computed(() => connected.value ? headerState.value : {
+  mode: "offline", label: "Apply", action: null, disabled: true, spinning: false,
+});
 const connectionBlocked = computed(() => isConnectionBlocked({
   page: page.value, connected: connected.value, iapReady: iapGate.value.ready,
   development: developmentPreview, dismissed: devGateDismissed.value,
@@ -498,10 +491,10 @@ const discardReason = computed(() => {
 });
 const stateLabel = computed(() => {
   if (!connected.value) return hasUnsaved.value ? "Unsaved · device offline" : "Offline";
+  if (saveInProgress.value || configInfo.value?.save_active) return "Saving…";
   if (busy.value) return "Working…";
   if (hasDraft.value) return "Draft changed";
-  if (configInfo.value?.save_active) return "Saving";
-  if (configInfo.value?.dirty) return "Applied in RAM";
+  if (configInfo.value?.dirty) return "Applied · Not saved";
   return "Saved";
 });
 const calibrationChecks = computed(() => {
@@ -1327,6 +1320,7 @@ function requestRefresh() {
   requestNavigation(refreshAll, { destructive: true });
 }
 
+/** @brief Run the shared header/footer action through existing operation guards. */
 function handleHeaderAction(action) {
   if (action === HEADER_ACTION.CONNECT) {
     void connectFlow();

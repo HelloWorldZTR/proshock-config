@@ -1,13 +1,10 @@
 <template>
-  <div class="page configurator-page">
+  <div class="page configurator-page settings-footer-page">
     <nav class="subtabs" aria-label="Configurator sections">
       <button v-for="item in tabs" :key="item.id" :class="{ active: section === item.id }" @click="$emit('section', item.id)">
         {{ item.label }}
       </button>
     </nav>
-    <div class="context-row">
-      <span>Slot {{ selectedProfile + 1 }}</span><b>·</b><span>{{ stateLabel }}</span>
-    </div>
     <div class="configurator-content" :data-section="section">
     <div v-if="section === 'system' || section === 'general'" class="system-settings">
       <header class="page-heading"><h1>System</h1><p>Profile input timing and device startup settings.</p></header>
@@ -124,7 +121,7 @@
         @update="$emit('stick-shape', $event)"
       />
     </div>
-    <SettingsApplyFooter :state="applyState" :state-label="stateLabel" @apply="$emit('apply')" />
+    <SettingsApplyFooter :state="actionState" :state-label="stateLabel" :profile="selectedProfile" @primary-action="$emit('primary-action', $event)" />
     </div>
   </div>
 </template>
@@ -146,9 +143,9 @@ const props = defineProps({
   section: String, selectedProfile: Number, stateLabel: String, profile: Object,
   baselineProfile: Object, pollrateHz: String, bootProfile: Number, ribbonMode: Number, adcBits: Number, raw: Object,
   snapshot: Object, calibration: Object, configInfo: Object,
-  directionDisabled: Boolean, connected: Boolean, readDigitalInput: Function, applyState: Object, canTest: Boolean,
+  directionDisabled: Boolean, connected: Boolean, readDigitalInput: Function, actionState: Object, canTest: Boolean,
 });
-defineEmits(["adc-bits", "ribbon-mode", "direction", "section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "button-debounce", "stick-shape", "stick-rc", "debounce-validity", "reset-curves", "copy-curve", "calibrate", "apply"]);
+defineEmits(["adc-bits", "ribbon-mode", "direction", "section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "button-debounce", "stick-shape", "stick-rc", "debounce-validity", "reset-curves", "copy-curve", "calibrate", "primary-action"]);
 const previewAxisInvert = computed(() => analogAxisInvert(props.calibration, props.configInfo?.axis_invert));
 const tabs = [
   { id: "system", label: "System" }, { id: "sticks", label: "Sticks" },

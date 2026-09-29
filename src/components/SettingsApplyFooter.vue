@@ -1,10 +1,21 @@
 <template>
   <footer class="configurator-apply-footer" aria-label="Current settings">
-    <div aria-live="polite"><strong>{{ stateLabel }}</strong><span>{{ state?.detail }}</span></div>
-    <button type="button" class="primary" :disabled="state?.disabled" @click="$emit('apply')">{{ state?.label || "Apply current settings" }}</button>
+    <div class="settings-footer-inner">
+      <div class="settings-footer-status" aria-live="polite">
+        <span v-if="profile !== undefined">Slot {{ profile + 1 }}</span>
+        <span v-else>Device settings</span>
+        <strong>{{ stateLabel }}</strong>
+      </div>
+      <button type="button" class="primary" :disabled="state?.disabled" :aria-busy="state?.spinning" @click="performAction">{{ state?.label || "Apply" }}</button>
+    </div>
   </footer>
 </template>
 <script setup>
-defineProps({ state: Object, stateLabel: { type: String, default: "Current settings" } });
-defineEmits(["apply"]);
+const props = defineProps({ state: Object, stateLabel: { type: String, default: "Current settings" }, profile: Number });
+const emit = defineEmits(["primary-action"]);
+/** @brief Dispatch only the currently available Apply or Save action. */
+function performAction() {
+  if (props.state?.disabled || !props.state?.action) return;
+  emit("primary-action", props.state.action);
+}
 </script>

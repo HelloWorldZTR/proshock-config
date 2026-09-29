@@ -243,20 +243,20 @@ test('manual bounds enable shared Apply, invalid endpoints block it, wizard owns
   const run = harness();
   run('connected.value = true; page.value = "calibration"; calibrationSection.value = "manual"; setCalibrationBound({kind:"axis",index:0,field:"raw_min",value:10})');
   assert.equal(run('canApply.value'), true);
-  assert.equal(run('configuratorApplyState.value.disabled'), false);
+  assert.equal(run('settingsActionState.value.disabled'), false);
   run('setCalibrationBound({kind:"trigger",index:0,field:"raw_released",value:NaN})');
   assert.equal(run('canApply.value'), false);
   run('calibrationDraft.value = clone(defaultCalibration); calibrationSection.value = "automatic"; wizardStep.value = "sticks-range"; profileDraft.value.pollrate_hz = 8000');
   assert.equal(run('canApply.value'), false);
-  assert.equal(run('configuratorApplyState.value.disabled'), true);
+  assert.equal(run('settingsActionState.value.disabled'), true);
 });
 
-test('both Apply entry points are blocked during save; a second Save cannot start', async () => {
+test('shared settings action is blocked during save; a second Save cannot start', async () => {
   const run = harness();
   run('connected.value = true; configInfo.value = {dirty:true, boot_profile:0}; let releaseCommand; let commands = 0; command = () => {commands++; return new Promise(resolve => {releaseCommand = resolve})}');
   const saving = run('saveConfig()');
   assert.equal(run('canSave.value'), false);
-  assert.equal(run('configuratorApplyState.value.disabled'), true);
+  assert.equal(run('settingsActionState.value.disabled'), true);
   assert.equal(await run('saveConfig()'), false);
   assert.equal(run('commands'), 1);
   // Simulate an error from the first command to finish the pending operation.
@@ -350,4 +350,34 @@ test('shape edits during color Apply are not marked as applied', async () => {
   assert.equal(run('profileBackup.value.stick_shape[0].scale_q15[0]'), 32768);
   assert.equal(run('profileBackup.value.color_rgb.join(",")'), '10,20,30');
   assert.equal(run('profileChanged.value'), true);
+});
+
+
+test('header and footer follow draft, applied, edited-again and saved states', () => {
+  const run = harness();
+  run('connected.value = true; page.value = "configurator"; configInfo.value = {dirty:false,boot_profile:0}; setStickShape({stickIndex:0,sector:0,scaleQ15:28000})');
+  assert.equal(run('settingsFooterVisible.value'), true);
+  assert.equal(run('settingsActionState.value === headerState.value'), true);
+  assert.equal(run('settingsActionState.value.action'), 'apply');
+  run('profileBackup.value = clone(profileDraft.value); configInfo.value.dirty = true');
+  assert.equal(run('settingsActionState.value.action'), 'save');
+  assert.equal(run('canSave.value'), true);
+  run('setStickShape({stickIndex:0,sector:1,scaleQ15:28000})');
+  assert.equal(run('settingsActionState.value.action'), 'apply');
+  assert.equal(run('canSave.value'), false);
+  run('profileBackup.value = clone(profileDraft.value); configInfo.value.dirty = false');
+  assert.equal(run('settingsActionState.value.label'), 'Saved');
+  assert.equal(run('settingsActionState.value.disabled'), true);
+  run('page.value = "home"');
+  assert.equal(run('settingsFooterVisible.value'), false);
+  run('page.value = "calibration"; calibrationSection.value = "automatic"; calibrationDraft.value.axis[0].raw_min = 10; configInfo.value.dirty = true');
+  assert.equal(run('headerState.value.action'), null);
+  assert.equal(run('canSave.value'), false);
+  run('calibrationSection.value = "manual"');
+  assert.equal(run('settingsFooterVisible.value'), true);
+  assert.equal(run('settingsActionState.value.action'), 'apply');
+  run('connected.value = false');
+  assert.equal(run('headerState.value.action'), 'connect');
+  assert.equal(run('settingsActionState.value.action'), null);
+  assert.equal(run('settingsActionState.value.disabled'), true);
 });

@@ -4,7 +4,6 @@ import {
   HEADER_ACTION,
   LEAVE_GUARD_KIND,
   deriveCalibrationGuardPending,
-  deriveConfiguratorApplyState,
   deriveHeaderState,
   deriveLeaveGuardKind,
   getPageEntryBlockReason,
@@ -134,18 +133,13 @@ test("calibration page requires a connected controller", () => {
   }), "");
 });
 
-test("Configurator Apply enables only for a valid connected draft", () => {
-  const derive = (overrides = {}) => deriveConfiguratorApplyState({
-    connected: true,
-    busy: false,
-    hasApplyDraft: true,
-    applyValid: true,
-    ...overrides,
-  });
-
-  assert.equal(derive().disabled, false);
-  assert.equal(derive({ connected: false }).disabled, true);
-  assert.equal(derive({ busy: true }).label, "Applying…");
-  assert.equal(derive({ hasApplyDraft: false }).disabled, true);
-  assert.equal(derive({ applyValid: false }).disabled, true);
+test("editing applied RAM requires Apply again before Save", () => {
+  const edited = header({ hasApplyDraft: true, ramDirty: true });
+  assert.equal(edited.action, HEADER_ACTION.APPLY);
+  assert.equal(edited.disabled, false);
+  const invalid = header({ hasApplyDraft: true, ramDirty: true, applyValid: false });
+  assert.equal(invalid.action, null);
+  assert.equal(invalid.disabled, true);
+  assert.equal(header({ ramDirty: true }).action, HEADER_ACTION.SAVE);
+  assert.equal(header({ saving: true, ramDirty: true }).action, null);
 });

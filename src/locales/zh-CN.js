@@ -208,6 +208,7 @@ registerLocale("zh-CN", "中文", {
   "Draft changed": "草稿已更改",
   "Saving": "正在保存",
   "Applied in RAM": "已应用到 RAM",
+  "Applied · Not saved": "已应用 · 未保存",
   "Saving…": "正在保存…",
   "Working…": "处理中…",
   "Calibrating": "校准中",
