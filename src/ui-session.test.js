@@ -14,7 +14,7 @@ for (const match of descriptor.scriptSetup.content.matchAll(/import\s+\{([^}]+)\
 }
 const source = descriptor.scriptSetup.content.replace(/import\s+[\s\S]*?\s+from\s+"[^"]+";/g, '').replace('import.meta.env.MODE', '"production"');
 /** @brief Run application state without a DOM or physical controller. */
-function harness({ timers = [] } = {}) {
+function harness({ timers = [], storage = new Map() } = {}) {
   const device = { productName: 'Test controller', opened: true };
   class FakeClient {
     device = device;
@@ -24,7 +24,7 @@ function harness({ timers = [] } = {}) {
   }
   const context = vm.createContext({
     ...imports, WebHidClient: FakeClient, onMounted: () => {}, onUnmounted: () => {},
-    window: { isSecureContext: true, setTimeout: callback => {
+    window: { isSecureContext: true, localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) }, setTimeout: callback => {
       timers.push(callback);
       return 1;
     }, clearInterval() {}, clearTimeout() {}, setInterval: () => 1 },
@@ -36,6 +36,7 @@ function harness({ timers = [] } = {}) {
     profileBackup.value = clone(profileDraft.value);
     calibrationBackup.value = clone(calibrationDraft.value);
     startSnapshotPolling = () => {};
+    calibrationSafetyAcknowledged.value = true;
   `, context);
   return code => vm.runInContext(code, context);
 }
@@ -420,4 +421,49 @@ test('automatic calibration Apply verifies runtime and profiles before footer Sa
   assert.equal(run('configInfo.value.dirty'), 0);
   await run('wizardPrimary()');
   assert.equal(run('writes'), 1);
+});
+
+
+test('first calibration waits for hardware warning and opt-out persists without duplicating capture', async () => {
+  const storage = new Map();
+  const run = harness({ storage });
+  run(`connected.value = true; page.value = "calibration"; calibrationSection.value = "automatic";
+    calibrationSafetyAcknowledged.value = false; let captures = 0;
+    loadAllProfiles = async () => [];
+    startCenterCapture = async () => {captures++};`);
+  await run('wizardPrimary()');
+  assert.equal(run('calibrationSafetyOpen.value'), true);
+  assert.equal(run('captures'), 0);
+  await run('wizardPrimary()');
+  assert.equal(run('captures'), 0);
+  run('closeCalibrationSafety()');
+  assert.equal(run('calibrationSafetyOpen.value'), false);
+  await run('wizardPrimary()');
+  assert.equal(run('calibrationSafetyOpen.value'), true);
+  run('performGo("home")');
+  assert.equal(run('calibrationSafetyOpen.value'), false);
+  run('performGo("calibration", "automatic")');
+  await run('wizardPrimary()');
+  assert.equal(run('calibrationSafetyOpen.value'), true);
+  await run('confirmCalibrationSafety(true)');
+  assert.equal(run('captures'), 1);
+  assert.equal(run('calibrationSafetyOpen.value'), false);
+  assert.equal(storage.get('proshock.calibrationSafety.dismissed.v1'), '1');
+  run('calibrationSafetyAcknowledged.value = false');
+  await run('wizardPrimary()');
+  assert.equal(run('calibrationSafetyOpen.value'), false);
+  assert.equal(run('captures'), 2);
+});
+
+test('Diagnostics opens Device Info while an explicit monitor link still works', () => {
+  const run = harness();
+  run('connected.value = true; page.value = "home"; requestPageNavigation("diagnostics")');
+  assert.equal(run('diagnosticsSection.value'), 'device');
+  assert.equal(run('currentRouteHash'), '#/diagnostics/device');
+  run('requestGo("diagnostics", "input")');
+  assert.equal(run('diagnosticsSection.value'), 'input');
+  run('requestPageNavigation("home"); requestPageNavigation("diagnostics")');
+  assert.equal(run('diagnosticsSection.value'), 'device');
+  assert.equal(run('parseRouteHash("#/diagnostics").section'), 'device');
+  assert.equal(run('parseRouteHash("#/diagnostics/input").section'), 'input');
 });

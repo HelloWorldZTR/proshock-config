@@ -69,7 +69,7 @@
       </div>
     <QuickCalibrationPage
       v-else
-      :step="wizardStep" :busy="busy || saveInProgress || wizardActionInProgress" :offline="!connected" :error="wizardError" :neutral-result="neutralResult"
+      :step="wizardStep" :development-preview="developmentPreview" :busy="busy || saveInProgress || wizardActionInProgress" :offline="!connected" :error="wizardError" :neutral-result="neutralResult"
       :calibration-mode="calibrationMode"
       :center-capture-active="centerCaptureActive" :center-capture-status="centerCaptureStatus"
       :left-range="rangeCaptureActive ? { sectorCounts: rangePreview.leftSectorCounts } : leftRange"
@@ -99,6 +99,7 @@
     />
     <SettingsApplyFooter v-if="settingsFooterVisible" :state="settingsActionState" :state-label="stateLabel"
       :profile="page === 'calibration' ? undefined : selectedProfile" @primary-action="handleHeaderAction" />
+    <CalibrationSafetyDialog v-if="calibrationSafetyOpen" @cancel="closeCalibrationSafety" @continue="confirmCalibrationSafety" />
     <UnsavedChangesDialog
       v-if="leaveGuardOpen"
       :kind="leaveGuardKind"
@@ -146,6 +147,7 @@ import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
 import HomePage from "./pages/HomePage.vue";
 import ConfiguratorPage from "./pages/ConfiguratorPage.vue";
 import QuickCalibrationPage from "./pages/QuickCalibrationPage.vue";
+import CalibrationSafetyDialog from "./components/CalibrationSafetyDialog.vue";
 import FirmwareUpgradePage from "./pages/FirmwareUpgradePage.vue";
 import DiagnosticsPage from "./pages/DiagnosticsPage.vue";
 import { cloneConfigData } from "./clone-data.js";
@@ -252,6 +254,10 @@ const calibrationBackup = ref(null);
 const latestRaw = ref(null);
 const analogSnapshot = ref(null);
 const wizardStep = ref("neutral");
+const calibrationSafetyOpen = ref(false);
+const calibrationSafetyAcknowledged = ref(false);
+const calibrationSafetyStorageKey = "proshock.calibrationSafety.dismissed.v1";
+let calibrationSafetyReturnFocus = null;
 const wizardError = ref("");
 const calibrationMode = ref("quick");
 const neutralResult = ref(null);
@@ -279,7 +285,7 @@ const allProfiles = ref([]);
 const page = ref("home");
 const configuratorSection = ref("system");
 const calibrationSection = ref("automatic");
-const diagnosticsSection = ref("input");
+const diagnosticsSection = ref("device");
 const toast = ref("");
 const wizardActionInProgress = ref(false);
 const profileFileInput = ref(null);
@@ -628,6 +634,7 @@ function routeHash(nextPage, section = null) {
 }
 
 function performGo(nextPage, section = null) {
+  if (calibrationSafetyOpen.value && (nextPage !== "calibration" || (section && section !== "automatic"))) closeCalibrationSafety();
   if (
     nextPage === "calibration"
     && page.value !== "calibration"
@@ -666,7 +673,7 @@ function parseRouteHash(hash) {
   }
   if (nextPage === "calibration") route.section = parts[1] === "manual" ? "manual" : "automatic";
   if (nextPage === "diagnostics") {
-    route.section = parts[1] || "input";
+    route.section = parts[1] || "device";
   }
   return route;
 }
@@ -722,7 +729,7 @@ function requestGo(nextPage, section = null) {
 
 function requestPageNavigation(nextPage) {
   if (iapMode.value && nextPage !== "firmware") return;
-  requestGo(nextPage);
+  requestGo(nextPage, nextPage === "diagnostics" && page.value !== "diagnostics" ? "device" : null);
 }
 
 function handleIapSession(active) {
@@ -1838,9 +1845,37 @@ async function finishRangeCapture() {
   }
 }
 
+/** @brief Read the optional browser-level dismissal without blocking calibration if storage is unavailable. */
+function calibrationSafetyDismissed() {
+  try { return window.localStorage?.getItem(calibrationSafetyStorageKey) === "1"; }
+  catch { return false; }
+}
+/** @brief Return focus to the Start button after closing the hardware warning. */
+function closeCalibrationSafety() {
+  calibrationSafetyOpen.value = false;
+  const focusTarget = calibrationSafetyReturnFocus;
+  calibrationSafetyReturnFocus = null;
+  void nextTick(() => focusTarget?.focus?.());
+}
+/** @brief Acknowledge this session's warning and optionally remember the choice. */
+function confirmCalibrationSafety(dontShowAgain) {
+  if (!calibrationSafetyOpen.value) return;
+  if (dontShowAgain) {
+    try { window.localStorage?.setItem(calibrationSafetyStorageKey, "1"); }
+    catch { /* Private mode may deny storage; the session acknowledgement still works. */ }
+  }
+  calibrationSafetyAcknowledged.value = true;
+  closeCalibrationSafety();
+  return wizardPrimary();
+}
 /** @brief Advance calibration once, retaining firmware verification before Save. */
 async function wizardPrimary() {
-  if (!connected.value || busy.value || saveInProgress.value || wizardActionInProgress.value || wizardStep.value === "complete") return;
+  if (!connected.value || busy.value || saveInProgress.value || wizardActionInProgress.value || wizardStep.value === "complete" || calibrationSafetyOpen.value) return;
+  if (wizardStep.value === "neutral" && !calibrationSafetyAcknowledged.value && !calibrationSafetyDismissed()) {
+    calibrationSafetyReturnFocus = document.activeElement;
+    calibrationSafetyOpen.value = true;
+    return;
+  }
   wizardActionInProgress.value = true;
   wizardError.value = "";
   try {

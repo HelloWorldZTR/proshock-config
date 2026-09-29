@@ -1,12 +1,7 @@
 <template>
   <section class="wizard">
-    <div class="wizard-progress">
-      <span>{{ stepNumber }}/{{ visibleStepCount }}</span>
-      <div><i :style="{ width: `${progress}%` }"></i></div>
-    </div>
     <header>
-      <p class="eyebrow">Analog calibration</p>
-      <h2>{{ title }}</h2>
+      <h1>{{ title }}</h1>
       <p>{{ instruction }}</p>
     </header>
 
@@ -86,10 +81,15 @@
     </div>
     <slot v-if="step === 'validate-calibration'" name="validation"></slot>
 
+    <div class="wizard-progress">
+      <span>{{ stepNumber }}/{{ visibleStepCount }}</span>
+      <div><i :style="{ width: `${progress}%` }"></i></div>
+    </div>
+
     <SettingsApplyFooter :state="footerState" :state-label="footerStatus" @primary-action="$emit('primary')">
       <template #secondary-actions>
-        <button type="button" :disabled="busy || stepNumber <= 1 || step === 'save' || step === 'complete'" @click="$emit('back')">Back</button>
-        <button type="button" :disabled="busy" @click="$emit('cancel')">Cancel</button>
+        <button type="button" :disabled="preview ? step === 'neutral' : busy || stepNumber <= 1 || step === 'save' || step === 'complete'" @click="$emit('back')">Back</button>
+        <button type="button" :disabled="busy && !preview" @click="$emit('cancel')">{{ preview ? "Exit preview" : "Cancel" }}</button>
       </template>
       <template #primary-content>
         <span>{{ footerState.label }}</span>
@@ -112,6 +112,7 @@ const props = defineProps({
   step: { type: String, required: true },
   busy: { type: Boolean, default: false },
   offline: { type: Boolean, default: false },
+  preview: { type: Boolean, default: false },
   error: { type: String, default: "" },
   calibrationMode: { type: String, default: "quick" },
   neutralResult: { type: Object, default: null },
@@ -128,7 +129,7 @@ defineEmits(["back", "cancel", "mode", "primary"]);
 
 const visibleSteps = WIZARD_STEPS.filter((step) => step !== "backup" && step !== "complete");
 const visibleStepCount = visibleSteps.length;
-const stepNumber = computed(() => Math.max(1, visibleSteps.indexOf(props.step) + 1));
+const stepNumber = computed(() => props.step === "complete" ? visibleStepCount : Math.max(1, visibleSteps.indexOf(props.step) + 1));
 const progress = computed(() => stepNumber.value / visibleStepCount * 100);
 const stickRanges = computed(() => [
   { label: "Left stick", data: props.leftRange },
@@ -210,11 +211,11 @@ const primaryDisabled = computed(() => (
 ));
 // The same fixed action bar carries each guarded wizard action, including Apply and Save.
 const footerState = computed(() => ({
-  label: props.offline ? "Connect controller" : props.busy ? "Working…" : primaryLabel.value,
+  label: props.preview ? primaryLabel.value : props.offline ? "Connect controller" : props.busy ? "Working…" : primaryLabel.value,
   action: "calibration",
-  disabled: props.busy || props.offline || primaryDisabled.value || props.step === "complete",
+  disabled: props.preview || props.busy || props.offline || primaryDisabled.value || props.step === "complete",
   spinning: props.busy,
 }));
-const footerStatus = computed(() => props.offline ? "Offline" : props.busy ? "Working…"
+const footerStatus = computed(() => props.preview ? "Step preview" : props.offline ? "Offline" : props.busy ? "Working…"
   : props.step === "save" ? "Applied · Not saved" : props.step === "complete" ? "Saved" : title.value);
 </script>

@@ -142,3 +142,12 @@ test("initial locale follows supported browser preferences unless manually selec
   assert.equal(selectInitialLocale("", ["fr-FR"]), "en");
   assert.equal(selectInitialLocale("", []), "en");
 });
+
+
+test('calibration safety dialog keeps the resistor-jumper short-circuit warning in Chinese', () => {
+  assert.equal(translate("Don't show this again", "zh-CN"), "不再提示");
+  assert.equal(translate(
+    "When using a TMR stick from another controller, you must change the power resistor jumper. Otherwise the power supply will short-circuit.",
+    "zh-CN",
+  ), "使用其他手柄的 TMR 摇杆必须修改供电电阻跳线，否则会造成电源短路！");
+});

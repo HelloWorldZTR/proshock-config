@@ -21,7 +21,8 @@
         <div><dt>Device</dt><dd>{{ deviceLabel }}</dd></div>
         <div><dt>Schema / profile / calibration</dt><dd>{{ configInfo?.schema_version ?? "—" }} / {{ profile?.profile_version ?? "—" }} / {{ calibration?.calibration_version ?? "—" }}</dd></div>
         <div><dt>Runtime generation / validation flags</dt><dd>{{ snapshot?.runtime_generation ?? "—" }} / {{ snapshot?.validation_flags ?? "—" }}</dd></div>
-        <div><dt>Firmware build / board / USB speed</dt><dd class="unsupported">Not supported by firmware</dd></div>
+        <div><dt>Firmware build</dt><dd class="unsupported">Not exposed over normal WebHID; IAP GET_INFO reports the installed version.</dd></div>
+        <div><dt>Board revision / USB speed</dt><dd class="unsupported">Not exposed over WebHID.</dd></div>
       </dl>
     </section>
     <section v-else-if="section === 'storage'" class="form-section">
@@ -49,8 +50,8 @@ defineProps({
 });
 defineEmits(["section", "export-log"]);
 const tabs = [
-  { id: "input", label: "Input Monitor" }, { id: "poll", label: "Poll Rate" },
-  { id: "device", label: "Device Info" }, { id: "storage", label: "Config Storage" },
+  { id: "device", label: "Device Info" }, { id: "input", label: "Input Monitor" },
+  { id: "poll", label: "Poll Rate" }, { id: "storage", label: "Config Storage" },
   { id: "log", label: "Event Log" },
 ];
 </script>
