@@ -21,7 +21,7 @@
         <div><dt>Device</dt><dd>{{ deviceLabel }}</dd></div>
         <div><dt>Schema / profile / calibration</dt><dd>{{ configInfo?.schema_version ?? "—" }} / {{ profile?.profile_version ?? "—" }} / {{ calibration?.calibration_version ?? "—" }}</dd></div>
         <div><dt>Runtime generation / validation flags</dt><dd>{{ snapshot?.runtime_generation ?? "—" }} / {{ snapshot?.validation_flags ?? "—" }}</dd></div>
-        <div><dt>Firmware build</dt><dd class="unsupported">Not exposed over normal WebHID; IAP GET_INFO reports the installed version.</dd></div>
+        <div><dt>Firmware build</dt><dd :class="{ unsupported: firmwareBuildVersion == null }">{{ firmwareBuildVersion ?? "Update firmware to report build version" }}</dd></div>
         <div><dt>Board revision / USB speed</dt><dd class="unsupported">Not exposed over WebHID.</dd></div>
       </dl>
     </section>
@@ -46,7 +46,7 @@ import AxisTable from "../components/AxisTable.vue";
 import InputViewer from "../components/InputViewer.vue";
 defineProps({
   section: String, raw: Object, snapshot: Object, calibration: Object, configInfo: Object,
-  profile: Object, connected: Boolean, deviceLabel: String, logs: Array,
+  profile: Object, connected: Boolean, deviceLabel: String, firmwareBuildVersion: Number, logs: Array,
 });
 defineEmits(["section", "export-log"]);
 const tabs = [

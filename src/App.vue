@@ -94,7 +94,7 @@
       v-else
       :section="diagnosticsSection" :raw="latestRaw" :snapshot="liveInputSnapshot"
       :calibration="calibrationDraft || defaultCalibration" :config-info="configInfo"
-      :profile="profileDraft" :connected="connected" :device-label="deviceLabel" :logs="logs"
+      :profile="profileDraft" :connected="connected" :device-label="deviceLabel" :firmware-build-version="firmwareBuildVersion" :logs="logs"
       @section="requestGo('diagnostics', $event)" @export-log="downloadDiagnostics"
     />
     <SettingsApplyFooter v-if="settingsFooterVisible" :state="settingsActionState" :state-label="stateLabel"
@@ -191,6 +191,7 @@ import {
   parseAnalogCalibration,
   parseAnalogSnapshot,
   parseConfigInfo,
+  parseFirmwareBuildVersion,
   parseDigitalInput,
   parseProfile,
   parseProfileChunk,
@@ -242,6 +243,7 @@ const disconnecting = ref(false);
 const iapMode = ref(false);
 const deviceLabel = ref("Disconnected");
 const configInfo = ref(null);
+const firmwareBuildVersion = ref(null);
 const lastStatus = ref(null);
 const selectedProfile = ref(0);
 const bootProfile = ref(0);
@@ -930,11 +932,12 @@ function downloadDiagnostics() {
     browser: { user_agent: navigator.userAgent, webhid: "hid" in navigator, secure_context: window.isSecureContext },
     device: { label: deviceLabel.value, connected: connected.value },
     config_metadata: configInfo.value,
+    firmware_build_version: firmwareBuildVersion.value,
     analog_calibration: calibrationDraft.value,
     active_profile: profileDraft.value,
     analog: analogSnapshot.value,
     events: logs.value,
-    firmware_blocked: ["effective report telemetry", "jitter", "skip/coalesce", "firmware build", "board revision", "USB speed", "factory reset"],
+    firmware_blocked: ["effective report telemetry", "jitter", "skip/coalesce", ...(firmwareBuildVersion.value == null ? ["firmware build"] : []), "board revision", "USB speed", "factory reset"],
   });
 }
 
@@ -1207,10 +1210,22 @@ function requestDisconnect() {
   leaveGuardOpen.value = true;
 }
 
+/** @brief Read optional build metadata without rejecting older firmware sessions. */
+async function readFirmwareBuildVersion() {
+  const packet = await scheduler.enqueue(
+    () => client.sendCommand(COMMAND.GET_BUILD_INFO, new Uint8Array()), 4,
+  );
+  if (packet.status === 0x02) return null;
+  expectOk(packet, "GET_BUILD_INFO");
+  return parseFirmwareBuildVersion(packet.payload);
+}
+
 async function refreshAll() {
   try {
     const infoPacket = await command(COMMAND.GET_CONFIG_INFO);
     configInfo.value = parseConfigInfo(infoPacket.payload);
+    try { firmwareBuildVersion.value = await readFirmwareBuildVersion(); }
+    catch (error) { firmwareBuildVersion.value = null; log(error.message); }
     const statusPacket = await command(COMMAND.GET_STATUS);
     lastStatus.value = parseStatus(statusPacket.payload);
     selectedProfile.value = configInfo.value.active_profile;

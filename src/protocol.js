@@ -32,6 +32,7 @@ export const COMMAND = {
   GET_ANALOG_SNAPSHOT: 0x11,
   GET_DIGITAL_INPUT: 0x12,
   SET_PROFILE_COLOR: 0x13,
+  GET_BUILD_INFO: 0x14,
   ENTER_IAP: 0x20,
 };
 
@@ -514,6 +515,19 @@ export function parseConfigInfo(payload) {
       };
     }),
   };
+}
+
+/** Decode the firmware-owned, monotonically increasing u32 build version. */
+export function parseFirmwareBuildVersion(payload) {
+  if (payload.byteLength !== 4) throw new Error(`Unexpected build info size: ${payload.byteLength}`);
+  const version = new DataView(payload.buffer, payload.byteOffset, 4).getUint32(0, true);
+  if (version === 0) throw new Error("Firmware build version must be nonzero.");
+  return version;
+}
+
+/** Treat old firmware without GET_BUILD_INFO as below every new feature threshold. */
+export function firmwareBuildAtLeast(version, minimum) {
+  return Number.isInteger(version) && Number.isInteger(minimum) && version >= minimum;
 }
 
 export function parseStatus(payload) {

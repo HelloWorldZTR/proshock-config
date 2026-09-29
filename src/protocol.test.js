@@ -16,6 +16,8 @@ import {
   normalizeButtonDebounceSamples,
   parseConfigInfo,
   parseDigitalInput,
+  parseFirmwareBuildVersion,
+  firmwareBuildAtLeast,
   parseProfile,
   writeProfileDraftToPayload,
 } from "./protocol.js";
@@ -89,4 +91,17 @@ test("legacy raw input fallback reconstructs buttons and diagonal D-pad", () => 
     buttons: (1 << 0) | (1 << 12),
     dpad_hat: 1,
   }), (1 << 0) | (1 << 12) | (1 << 14) | (1 << 15));
+});
+
+
+test("firmware build version decodes as an unsigned little-endian, sortable number", () => {
+  const bytes = new Uint8Array([0x49, 0x70, 0xc3, 0x78]);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 2026093001, true);
+  assert.equal(parseFirmwareBuildVersion(bytes), 2026093001);
+  assert.equal(firmwareBuildAtLeast(2026093001, 2026093001), true);
+  assert.equal(firmwareBuildAtLeast(2026093001, 2026093002), false);
+  assert.equal(firmwareBuildAtLeast(null, 2026093001), false);
+  assert.throws(() => parseFirmwareBuildVersion(new Uint8Array(3)), /size/);
+  assert.throws(() => parseFirmwareBuildVersion(new Uint8Array(4)), /nonzero/);
 });

@@ -545,6 +545,7 @@ registerLocale("zh-CN", "中文", {
   "Schema / profile / calibration": "架构 / 槽位 / 校准",
   "Runtime generation / validation flags": "运行时代次 / 校验标志",
   "Firmware build": "固件构建",
+  "Update firmware to report build version": "更新固件以读取构建版本",
   "Not exposed over normal WebHID; IAP GET_INFO reports the installed version.": "普通 WebHID 未提供构建信息；IAP 的 GET_INFO 可读取已安装版本。",
   "Board revision / USB speed": "板子版本 / USB 速率",
   "Not exposed over WebHID.": "WebHID 未提供。",

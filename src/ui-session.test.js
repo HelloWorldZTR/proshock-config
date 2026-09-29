@@ -467,3 +467,16 @@ test('Diagnostics opens Device Info while an explicit monitor link still works',
   assert.equal(run('parseRouteHash("#/diagnostics").section'), 'device');
   assert.equal(run('parseRouteHash("#/diagnostics/input").section'), 'input');
 });
+
+test('optional build query reads new firmware and tolerates the legacy BAD_COMMAND response', async () => {
+  const run = harness();
+  run(`scheduler.enqueue = operation => operation();
+    client.sendCommand = async () => ({status:2, payload:new Uint8Array()});`);
+  assert.equal(await run('readFirmwareBuildVersion()'), null);
+  run(`client.sendCommand = async () => {
+    const payload = new Uint8Array(4);
+    new DataView(payload.buffer).setUint32(0, 2026093001, true);
+    return {status:0, payload};
+  }`);
+  assert.equal(await run('readFirmwareBuildVersion()'), 2026093001);
+});
