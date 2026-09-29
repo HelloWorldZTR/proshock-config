@@ -48,13 +48,13 @@
       v-else-if="page === 'configurator' && !iapMode"
       :section="configuratorSection" :selected-profile="selectedProfile" :state-label="stateLabel"
       :profile="profileDraft" :baseline-profile="profileBackup" :pollrate-hz="pollrateHz"
-      :boot-profile="bootProfile" :ribbon-mode="ribbonMode" :raw="latestRaw" :snapshot="liveInputSnapshot"
+      :boot-profile="bootProfile" :ribbon-mode="ribbonMode" :adc-bits="adcBits" :raw="latestRaw" :snapshot="liveInputSnapshot"
       :calibration="calibrationDraft || defaultCalibration" :config-info="configInfo"
       :connected="connected" :read-digital-input="getDigitalInput"
       :direction-disabled="busy || saveInProgress || calibrationOwnsHeaderActions" @direction="setAnalogDirection"
       :apply-state="configuratorApplyState"
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
-      @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event" @ribbon-mode="setRibbonMode"
+      @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event" @ribbon-mode="setRibbonMode" @adc-bits="setAdcBits"
       @debounce-validity="debounceValid = $event"
       :can-test="connected && !hasDraft && !saveInProgress && !!analogSnapshot"
       @response="setResponse" @resolver="setResolver" @button-debounce="setButtonDebounce"
@@ -171,6 +171,8 @@ import {
   BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
   COMMAND,
   FEATURE_RIBBON_HML,
+  ADC_DEPTH_CODES,
+  adcDepthFlags,
   CONFIG_STATUS_NAME,
   PROFILE_CHUNK_DATA_SIZE,
   PROFILE_COUNT,
@@ -247,6 +249,7 @@ const lastStatus = ref(null);
 const selectedProfile = ref(0);
 const bootProfile = ref(0);
 const ribbonMode = ref(0);
+const adcBits = ref(12);
 const profileDraft = ref(null);
 const calibrationDraft = ref(null);
 const profileBackup = ref(null);
@@ -375,8 +378,12 @@ const profileColorOnlyChanged = computed(() => {
   draft.color_rgb = clone(profileBackup.value.color_rgb);
   return JSON.stringify(draft) === JSON.stringify(profileBackup.value);
 });
-const draftFeatureFlags = computed(() => ((Number(configInfo.value?.feature_flags || 0) & ~FEATURE_RIBBON_HML)
-  | (ribbonMode.value === 1 ? FEATURE_RIBBON_HML : 0)) >>> 0);
+const draftFeatureFlags = computed(() => {
+  const flags = ((Number(configInfo.value?.feature_flags || 0) & ~FEATURE_RIBBON_HML)
+    | (ribbonMode.value === 1 ? FEATURE_RIBBON_HML : 0)) >>> 0;
+  // Legacy firmware keeps its unknown ADC flag bytes exactly as received.
+  return configInfo.value?.adc_depth_supported ? adcDepthFlags(flags, adcBits.value) : flags;
+});
 const globalChanged = computed(() => !!configInfo.value && (
   configInfo.value.boot_profile !== bootProfile.value
   || (Number(configInfo.value.feature_flags || 0) >>> 0) !== draftFeatureFlags.value
@@ -809,6 +816,13 @@ function setRibbonMode(value) {
   ribbonMode.value = value;
 }
 
+/** @brief Edit supported device-level depth; external acquisition is not available yet. */
+function setAdcBits(value) {
+  if (!ADC_DEPTH_CODES.includes(value) || busy.value || saveInProgress.value || calibrationOwnsHeaderActions.value) return;
+  if (connected.value && !configInfo.value?.adc_depth_supported) return;
+  adcBits.value = value;
+}
+
 /** @brief Change global direction and its physical calibration coordinates together. */
 function setAnalogDirection({ channel, inverted }) {
   if (!calibrationDraft.value || busy.value || saveInProgress.value || calibrationOwnsHeaderActions.value) return;
@@ -1105,7 +1119,8 @@ async function connectFlow() {
       if (device !== retainedDevice || info.active_profile !== selectedProfile.value
           || JSON.stringify(profile) !== JSON.stringify(profileBackup.value)
           || JSON.stringify(calibration) !== JSON.stringify(calibrationBackup.value)
-          || info.boot_profile !== configInfo.value.boot_profile) {
+          || info.boot_profile !== configInfo.value.boot_profile
+          || info.feature_flags !== configInfo.value.feature_flags) {
         connectionConflict.value = true;
         throw new Error("Device settings differ from this draft. Export your draft or discard it before continuing.");
       }
@@ -1195,6 +1210,7 @@ async function refreshAll() {
     selectedProfile.value = configInfo.value.active_profile;
     bootProfile.value = configInfo.value.boot_profile;
     ribbonMode.value = (configInfo.value.feature_flags & FEATURE_RIBBON_HML) ? 1 : 0;
+    adcBits.value = configInfo.value.adc_bits;
     profileDraft.value = await readProfile(selectedProfile.value);
     calibrationDraft.value = await readCalibration();
     profileBackup.value = clone(profileDraft.value);
@@ -1359,6 +1375,7 @@ function restoreLocalBaselines() {
   if (configInfo.value) {
     bootProfile.value = configInfo.value.boot_profile;
     ribbonMode.value = (configInfo.value.feature_flags & FEATURE_RIBBON_HML) ? 1 : 0;
+    adcBits.value = configInfo.value.adc_bits;
   }
   resetCalibrationProgress();
 }
@@ -1409,6 +1426,7 @@ async function rollbackAppliedChanges() {
     configInfo.value = parseConfigInfo(infoPacket.payload);
     bootProfile.value = savedGlobalBaseline.value.boot_profile;
     ribbonMode.value = (savedGlobalBaseline.value.feature_flags & FEATURE_RIBBON_HML) ? 1 : 0;
+    adcBits.value = ADC_DEPTH_CODES[(savedGlobalBaseline.value.feature_flags >>> 1) & 3];
     profileDraft.value = savedProfileBaseline.value
       ? clone(savedProfileBaseline.value)
       : profileDraft.value;

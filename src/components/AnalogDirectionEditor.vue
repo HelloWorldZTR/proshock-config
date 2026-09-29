@@ -1,15 +1,15 @@
 <template>
   <section class="analog-directions">
-    <header><h2>Hardware directions</h2><p>Preview uses raw ADC and draft directions. Apply before calibration.</p></header>
+    <header><h2>Hardware directions</h2><p>Move right/down, press triggers. If the preview is reversed, turn on Invert.</p></header>
     <p v-if="!supported" class="support-note">Update firmware to support configurable analog directions.</p>
     <div class="editor-split direction-split">
       <div class="direction-fields">
         <label v-for="channel in [0, 1, 2, 3]" :key="channel" class="system-pollrate direction-row">
           <span>{{ labels[channel] }} <small>ADC {{ raw?.adc?.[channel] ?? '—' }}</small></span>
-          <select :aria-label="`${labels[channel]} ADC direction`" :value="inverted(channel) ? 'decreases' : 'increases'" :disabled="!supported || disabled" @change="$emit('direction', { channel, inverted: $event.target.value === 'decreases' })">
-            <option value="increases">{{ channel % 2 ? 'Down increases ADC' : 'Right increases ADC' }}</option>
-            <option value="decreases">{{ channel % 2 ? 'Down decreases ADC' : 'Right decreases ADC' }}</option>
-          </select>
+          <span class="rc-stage-switch direction-switch">
+            <input type="checkbox" role="switch" :aria-label="`${labels[channel]} invert`" :checked="inverted(channel)" :disabled="!supported || disabled" @change="$emit('direction', { channel, inverted: $event.target.checked })">
+            <span class="rc-switch-track" aria-hidden="true"></span><span>Invert</span>
+          </span>
         </label>
       </div>
       <div class="direction-viewer" aria-label="Stick direction preview">
@@ -20,9 +20,10 @@
       <div class="direction-fields">
         <label v-for="channel in [4, 5]" :key="channel" class="system-pollrate direction-row">
           <span>{{ labels[channel] }} <small>ADC {{ raw?.adc?.[channel] ?? '—' }}</small></span>
-          <select :aria-label="`${labels[channel]} ADC direction`" :value="inverted(channel) ? 'decreases' : 'increases'" :disabled="!supported || disabled" @change="$emit('direction', { channel, inverted: $event.target.value === 'decreases' })">
-            <option value="increases">Press increases ADC</option><option value="decreases">Press decreases ADC</option>
-          </select>
+          <span class="rc-stage-switch direction-switch">
+            <input type="checkbox" role="switch" :aria-label="`${labels[channel]} invert`" :checked="inverted(channel)" :disabled="!supported || disabled" @change="$emit('direction', { channel, inverted: $event.target.checked })">
+            <span class="rc-switch-track" aria-hidden="true"></span><span>Invert</span>
+          </span>
         </label>
       </div>
       <div class="direction-trigger-preview" aria-label="Trigger direction preview">
@@ -68,7 +69,9 @@ function preview(channel) {
 .analog-directions p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .direction-split { align-items: center; }
 .direction-row { grid-template-columns: var(--system-label-width, 240px) minmax(0, 1fr); }
-.direction-row > span { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.direction-row > span:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.direction-row > .direction-switch { align-items: center; justify-content: flex-start; min-height: 38px; padding-top: 0; gap: 9px; }
+.direction-switch:has(input:disabled) { opacity: .5; cursor: default; }
 .direction-row small { color: var(--muted); font: 10px var(--font-mono); white-space: nowrap; }
 .direction-viewer :deep(.roundness-preview) { margin-top: 0; }
 .direction-triggers { padding-top: 12px; border-top: 1px solid var(--border); }
@@ -76,5 +79,5 @@ function preview(channel) {
 .direction-trigger-meter { display: grid; align-content: center; gap: 8px; min-height: 62px; }
 .direction-trigger-meter > div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 11px; }
 .direction-trigger-meter > div span { color: var(--accent); font: 12px var(--font-mono); }
-@media (max-width: 600px) { .direction-row { grid-template-columns: 1fr; row-gap: 8px; } .direction-row select { width: 100%; } }
+@media (max-width: 600px) { .direction-row { grid-template-columns: 1fr; row-gap: 8px; } }
 </style>

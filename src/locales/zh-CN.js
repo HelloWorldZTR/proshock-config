@@ -1,6 +1,9 @@
 import { registerLocale } from "../i18n.js";
 
 registerLocale("zh-CN", "中文", {
+  "Invert": "反转",
+  "{axis} invert": "{axis} 反转",
+  "Move right/down, press triggers. If the preview is reversed, turn on Invert.": "向右或向下移动摇杆、按下扳机。如果预览方向相反，请开启反转。",
   "Ribbon mode": "排线模式",
   "Original": "原装",
   "Update firmware to support ribbon mode.": "请更新固件以支持排线模式。",
@@ -727,4 +730,22 @@ registerLocale("zh-CN", "中文", {
   "Controller disconnected. Recording stopped; captured steps were preserved.": "手柄已断开，录制已停止，已捕获的步骤已保留。",
   "Recording uses live snapshots about every 50 ms and may miss short presses. The 4 ms step size is storage precision.": "录制使用约每 50 毫秒一次的实时快照，可能漏掉短促按键；4 毫秒步长表示存储精度。",
   "Macro {macro} cannot hold forever in Once mode.": "宏 {macro} 在一次模式下不能保持最后一步。",
+  "ADC sampling": "ADC 采样",
+  "ADC source": "ADC 来源",
+  "Internal ADC": "内置 ADC",
+  "External ADC": "外置 ADC",
+  "Sampling depth": "采样深度",
+  "8 bit": "8 位",
+  "10 bit": "10 位",
+  "12 bit": "12 位",
+  "14 bit": "14 位",
+  "14 bit (4 samples)": "14 位（4 次采样）",
+  "16 bit": "16 位",
+  "18 bit": "18 位",
+  "External ADC · 14 / 16 / 18 bit · available in a future firmware update.": "外置 ADC 支持 14 / 16 / 18 位，后续固件更新开放。",
+  "Update firmware to support sampling depth.": "请更新固件以支持采样深度设置。",
+  "Four readings are combined for each update. Input updates remain at 8 kHz.": "每次更新累加 4 次采样，输入更新率保持 8 kHz。",
+  "Higher precision": "更高精度",
+  "Lower latency": "更低延迟",
+  "Restore 12-bit sampling": "恢复默认 12 位采样",
 });

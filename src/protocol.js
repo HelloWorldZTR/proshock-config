@@ -83,6 +83,18 @@ export const PROTOCOL_VERSION = 2;
 export const SCHEMA_VERSION = 11;
 export const FEATURE_RIBBON_HML = 0x00000001;
 export const CAPABILITY_RIBBON_MODE = 0x01;
+export const FEATURE_ADC_DEPTH_MASK = 0x06;
+export const FEATURE_ADC_EXTERNAL = 0x08;
+export const CAPABILITY_ADC_DEPTH = 0x02;
+export const ADC_DEPTH_CODES = Object.freeze([12, 8, 10, 14]);
+export const ADC_DEPTH_OPTIONS = Object.freeze([8, 10, 12, 14, 16, 18]);
+
+/** Encode an internal ADC depth while preserving all other device flags. */
+export function adcDepthFlags(flags, bits) {
+  const code = ADC_DEPTH_CODES.indexOf(bits);
+  if (code < 0) throw new Error('Unsupported internal ADC depth.');
+  return ((Number(flags) & ~FEATURE_ADC_DEPTH_MASK) | (code << 1)) >>> 0;
+}
 export const LEGACY_PROFILE_VERSION = 5;
 export const PREVIOUS_PROFILE_VERSION = 6;
 export const PROFILE_VERSION = 7;
@@ -486,6 +498,9 @@ export function parseConfigInfo(payload) {
     feature_flags: view.getUint32(24, true),
     ribbon_mode: (view.getUint32(24, true) & FEATURE_RIBBON_HML) ? 1 : 0,
     ribbon_mode_supported: payload.byteLength >= CONFIG_INFO_SIZE && (payload[55] & CAPABILITY_RIBBON_MODE) !== 0,
+    adc_bits: ADC_DEPTH_CODES[(view.getUint32(24, true) >>> 1) & 3],
+    adc_source: (view.getUint32(24, true) & FEATURE_ADC_EXTERNAL) ? 'external' : 'internal',
+    adc_depth_supported: payload.byteLength >= CONFIG_INFO_SIZE && (payload[55] & CAPABILITY_ADC_DEPTH) !== 0,
     axis_invert_mask: payload.byteLength >= CONFIG_INFO_SIZE ? payload[52] & 0x0f : null,
     axis_invert: axisInvert,
     analog_direction_mask: payload.byteLength >= CONFIG_INFO_SIZE && payload[54] >= 2 ? payload[53] : null,

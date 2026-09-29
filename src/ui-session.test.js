@@ -86,6 +86,62 @@ test('hardware direction edits are global calibration drafts and preserve profil
   assert.equal(run('calibrationDraft.value.direction_mask'), 17);
 });
 
+test('ADC depth Apply preserves other flags and calibration, and later edits remain drafts', async () => {
+  const run = harness();
+  run(`connected.value = true; configInfo.value = {boot_profile:0, feature_flags:0x80000001, adc_depth_supported:true}; ribbonMode.value = 1;
+    const physicalBefore = JSON.stringify(calibrationDraft.value);
+    setAdcBits(14); let submittedFlags; let finish;
+    command = (id,payload) => {submittedFlags = new DataView(payload.buffer).getUint32(8,true); return new Promise(resolve => {finish=resolve})};
+    pollAnalogSnapshot = async () => {};`);
+  assert.equal(run('canApply.value'), true);
+  const applying = run('applyDraft()');
+  run(`adcBits.value = 10; const payload = new Uint8Array(56); new DataView(payload.buffer).setUint32(24,submittedFlags,true); payload[55] = 3; finish({payload})`);
+  await applying;
+  assert.equal(run('submittedFlags'), 0x80000007);
+  assert.equal(run('configInfo.value.adc_bits'), 14);
+  assert.equal(run('adcBits.value'), 10);
+  assert.equal(run('globalChanged.value'), true);
+  assert.equal(run('JSON.stringify(calibrationDraft.value) === physicalBefore'), true);
+  run('captureSavedBaselines(); restoreLocalBaselines()');
+  assert.equal(run('savedGlobalBaseline.value.feature_flags'), 0x80000007);
+  assert.equal(run('adcBits.value'), 14);
+  assert.equal(run('globalChanged.value'), false);
+});
+
+test('ADC depth rejects unavailable modes and preserves legacy unknown bits', () => {
+  const run = harness();
+  run('connected.value = true; configInfo.value = {boot_profile:0,feature_flags:0x80000006}; setAdcBits(8)');
+  assert.equal(run('adcBits.value'), 12);
+  assert.equal(run('draftFeatureFlags.value'), 0x80000006);
+  run('configInfo.value.adc_depth_supported=true; setAdcBits(16); setAdcBits(18)');
+  assert.equal(run('adcBits.value'), 12);
+  run('setAdcBits(8)');
+  assert.equal(run('adcBits.value'), 8);
+  run('busy.value=true; setAdcBits(14)');
+  assert.equal(run('adcBits.value'), 8);
+});
+
+test('ADC depth follows Apply then Save and reloads the applied baseline', async () => {
+  const run = harness();
+  run(`connected.value = true; configInfo.value={boot_profile:0,feature_flags:0,dirty:false,adc_depth_supported:true};
+    let storedFlags=0; let dirty=0;
+    command = async (id,payload) => {
+      if(id === COMMAND.SET_GLOBAL_CONFIG) {storedFlags=new DataView(payload.buffer).getUint32(8,true);dirty=1;}
+      if(id === COMMAND.SAVE_CONFIG) {dirty=0;return {payload:new Uint8Array(16)}}
+      const info=new Uint8Array(56); info[7]=dirty; info[55]=3; new DataView(info.buffer).setUint32(24,storedFlags,true); return {payload:info};
+    };
+    pollAnalogSnapshot=async () => {}; setAdcBits(14);`);
+  assert.equal(run('canSave.value'), false);
+  assert.equal(await run('applyDraft()'), true);
+  assert.equal(run('canSave.value'), true);
+  assert.equal(await run('saveConfig()'), true);
+  assert.equal(run('savedGlobalBaseline.value.feature_flags'), 6);
+  assert.equal(run('configInfo.value.adc_bits'), 14);
+  assert.equal(run('canSave.value'), false);
+  run('setAdcBits(8); restoreLocalBaselines()');
+  assert.equal(run('adcBits.value'), 14);
+});
+
 test('automatic calibration cannot capture with unapplied directions', async () => {
   const run = harness();
   run('connected.value = true; page.value = "configurator"; setAnalogDirection({channel:1,inverted:true}); page.value = "calibration"; calibrationSection.value = "automatic"; wizardStep.value = "neutral"; let captures = 0; loadAllProfiles = async () => {captures++; return []}; startCenterCapture = async () => {captures++}');
