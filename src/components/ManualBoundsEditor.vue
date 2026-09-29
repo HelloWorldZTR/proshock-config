@@ -23,13 +23,11 @@
       </div>
     </section>
     <div v-if="errors.length" class="field-error" role="alert"><p v-for="error in errors" :key="error">{{ error }}</p></div>
-    <SettingsApplyFooter :state="actionState" :state-label="stateLabel" @primary-action="$emit('primary-action', $event)" />
   </section>
 </template>
 <script setup>
-import SettingsApplyFooter from "./SettingsApplyFooter.vue";
-defineProps({ calibration: Object, errors: { type: Array, default: () => [] }, actionState: Object, stateLabel: String });
-const emit = defineEmits(["update", "primary-action"]);
+defineProps({ calibration: Object, errors: { type: Array, default: () => [] } });
+const emit = defineEmits(["update"]);
 const groups = [{ label: "Left stick", kind: "axis", indices: [0, 1] }, { label: "Right stick", kind: "axis", indices: [2, 3] }, { label: "Triggers", kind: "trigger", indices: [0, 1] }];
 /** Preserve invalid input as NaN so shared calibration validation blocks Apply. */
 function update(event, kind, index, field) { emit("update", { kind, index, field, value: event.target.valueAsNumber }); }

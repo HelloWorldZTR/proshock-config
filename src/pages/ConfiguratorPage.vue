@@ -1,5 +1,5 @@
 <template>
-  <div class="page configurator-page settings-footer-page">
+  <div class="page configurator-page">
     <nav class="subtabs" aria-label="Configurator sections">
       <button v-for="item in tabs" :key="item.id" :class="{ active: section === item.id }" @click="$emit('section', item.id)">
         {{ item.label }}
@@ -121,7 +121,6 @@
         @update="$emit('stick-shape', $event)"
       />
     </div>
-    <SettingsApplyFooter :state="actionState" :state-label="stateLabel" :profile="selectedProfile" @primary-action="$emit('primary-action', $event)" />
     </div>
   </div>
 </template>
@@ -137,15 +136,14 @@ import RCFilterEditor from "../components/RCFilterEditor.vue";
 import ResolverEditor from "../components/ResolverEditor.vue";
 import StickRoundnessEditor from "../components/StickRoundnessEditor.vue";
 import ButtonDebounceControl from "../components/ButtonDebounceControl.vue";
-import SettingsApplyFooter from "../components/SettingsApplyFooter.vue";
 
 const props = defineProps({
-  section: String, selectedProfile: Number, stateLabel: String, profile: Object,
+  section: String, selectedProfile: Number, profile: Object,
   baselineProfile: Object, pollrateHz: String, bootProfile: Number, ribbonMode: Number, adcBits: Number, raw: Object,
   snapshot: Object, calibration: Object, configInfo: Object,
-  directionDisabled: Boolean, connected: Boolean, readDigitalInput: Function, actionState: Object, canTest: Boolean,
+  directionDisabled: Boolean, connected: Boolean, readDigitalInput: Function, canTest: Boolean,
 });
-defineEmits(["adc-bits", "ribbon-mode", "direction", "section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "button-debounce", "stick-shape", "stick-rc", "debounce-validity", "reset-curves", "copy-curve", "calibrate", "primary-action"]);
+defineEmits(["adc-bits", "ribbon-mode", "direction", "section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "button-debounce", "stick-shape", "stick-rc", "debounce-validity", "reset-curves", "copy-curve", "calibrate"]);
 const previewAxisInvert = computed(() => analogAxisInvert(props.calibration, props.configInfo?.axis_invert));
 const tabs = [
   { id: "system", label: "System" }, { id: "sticks", label: "Sticks" },

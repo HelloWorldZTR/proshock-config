@@ -34,12 +34,6 @@
           </li>
         </ul>
       </template>
-      <template #save>
-        <div class="save-explainer">
-          <strong>Apply is in RAM. Save persists through the firmware A/B flash service.</strong>
-          <p>The four Profile response payloads are verified unchanged before this step completes.</p>
-        </div>
-      </template>
     </CalibrationWizard>
   </div>
 </template>

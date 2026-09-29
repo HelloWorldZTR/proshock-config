@@ -85,28 +85,25 @@
       </div>
     </div>
     <slot v-if="step === 'validate-calibration'" name="validation"></slot>
-    <slot v-if="step === 'save'" name="save"></slot>
 
-    <footer class="wizard-actions">
-      <button type="button" :disabled="busy || stepNumber <= 1 || step === 'save'" @click="$emit('back')">Back</button>
-      <button type="button" :disabled="busy" @click="$emit('cancel')">Cancel</button>
-      <button type="button" class="primary wizard-primary" :disabled="busy || offline || primaryDisabled" @click="$emit('primary')">
-        <span>{{ offline ? "Connect controller" : busy ? "Working…" : primaryLabel }}</span>
-        <span
-          v-if="showControllerConfirmIcons"
-          class="controller-confirm-buttons"
-          aria-label="Cross or Circle button"
-        >
-          <img :src="crossIcon" alt="Cross button">
-          <img :src="circleIcon" alt="Circle button">
+    <SettingsApplyFooter :state="footerState" :state-label="footerStatus" @primary-action="$emit('primary')">
+      <template #secondary-actions>
+        <button type="button" :disabled="busy || stepNumber <= 1 || step === 'save' || step === 'complete'" @click="$emit('back')">Back</button>
+        <button type="button" :disabled="busy" @click="$emit('cancel')">Cancel</button>
+      </template>
+      <template #primary-content>
+        <span>{{ footerState.label }}</span>
+        <span v-if="showControllerConfirmIcons" class="controller-confirm-buttons" aria-label="Cross or Circle button">
+          <img :src="crossIcon" alt="Cross button"><img :src="circleIcon" alt="Circle button">
         </span>
-      </button>
-    </footer>
+      </template>
+    </SettingsApplyFooter>
   </section>
 </template>
 
 <script setup>
 import { computed } from "vue";
+import SettingsApplyFooter from "./components/SettingsApplyFooter.vue";
 import { CENTER_RETURN_DIRECTIONS, WIZARD_STEPS } from "./calibration.js";
 import crossIcon from "./assets/PlayStation_button_X.svg";
 import circleIcon from "./assets/PlayStation_button_C.svg";
@@ -185,7 +182,7 @@ const copy = {
   "triggers-released": ["Trigger released points", "Leave L2 and R2 completely released while a stable window is sampled."],
   "triggers-pressed": ["Trigger press/release cycles", "Detection has started. Press L2 and R2 fully, then release both; repeat five times. No extra clicks are needed."],
   "validate-calibration": ["Review and apply calibration", "Review the physical bounds, sector coverage, and return stability. Apply updates RAM after automatic firmware and Profile integrity checks."],
-  save: ["Save to flash", "Calibration is active in RAM and its runtime state has been verified. Save explicitly commits it through the low-priority A/B flash service."],
+  save: ["Save calibration", "Calibration is applied. Save to keep it after restarting the controller."],
 };
 
 const title = computed(() => copy[props.step]?.[0] || "Calibration complete");
@@ -201,8 +198,9 @@ const primaryLabel = computed(() => ({
   "sticks-range": "Finish both sticks",
   "triggers-released": "Capture released",
   "triggers-pressed": props.triggerCaptureActive ? "Listening…" : "Retry detection",
-  "validate-calibration": "Apply calibration",
+  "validate-calibration": "Apply",
   save: "Save",
+  complete: "Saved",
 }[props.step] || "Continue"));
 
 const primaryDisabled = computed(() => (
@@ -210,4 +208,13 @@ const primaryDisabled = computed(() => (
   || (props.step === "triggers-pressed" && props.triggerCaptureActive)
   || (props.step === "neutral" && props.centerCaptureActive)
 ));
+// The same fixed action bar carries each guarded wizard action, including Apply and Save.
+const footerState = computed(() => ({
+  label: props.offline ? "Connect controller" : props.busy ? "Working…" : primaryLabel.value,
+  action: "calibration",
+  disabled: props.busy || props.offline || primaryDisabled.value || props.step === "complete",
+  spinning: props.busy,
+}));
+const footerStatus = computed(() => props.offline ? "Offline" : props.busy ? "Working…"
+  : props.step === "save" ? "Applied · Not saved" : props.step === "complete" ? "Saved" : title.value);
 </script>

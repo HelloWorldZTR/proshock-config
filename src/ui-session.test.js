@@ -369,7 +369,14 @@ test('header and footer follow draft, applied, edited-again and saved states', (
   assert.equal(run('settingsActionState.value.label'), 'Saved');
   assert.equal(run('settingsActionState.value.disabled'), true);
   run('page.value = "home"');
+  assert.equal(run('settingsFooterVisible.value'), true);
+  run('page.value = "diagnostics"');
+  assert.equal(run('settingsFooterVisible.value'), true);
+  run('page.value = "firmware"');
+  assert.equal(run('settingsFooterVisible.value'), true);
+  run('iapMode.value = true');
   assert.equal(run('settingsFooterVisible.value'), false);
+  run('iapMode.value = false');
   run('page.value = "calibration"; calibrationSection.value = "automatic"; calibrationDraft.value.axis[0].raw_min = 10; configInfo.value.dirty = true');
   assert.equal(run('headerState.value.action'), null);
   assert.equal(run('canSave.value'), false);
@@ -380,4 +387,37 @@ test('header and footer follow draft, applied, edited-again and saved states', (
   assert.equal(run('headerState.value.action'), 'connect');
   assert.equal(run('settingsActionState.value.action'), null);
   assert.equal(run('settingsActionState.value.disabled'), true);
+});
+
+
+test('automatic calibration Apply verifies runtime and profiles before footer Save, without duplicate writes', async () => {
+  const run = harness();
+  run(`connected.value = true; page.value = "calibration"; wizardStep.value = "validate-calibration";
+    configInfo.value = {dirty:false,boot_profile:0,feature_flags:0};
+    calibrationDraft.value.axis[0].raw_min = 10;
+    calibrationProfileGuard.value = profileResponseSignature([profileBackup.value]);
+    loadAllProfiles = async () => [profileBackup.value];
+    let reads = 0; readAnalogSnapshot = async () => ({runtime_generation:++reads, adc_running:true});
+    let finishWrite; let writes = 0;
+    writeCalibrationValue = value => {writes++; return new Promise(resolve => {finishWrite = () => {configInfo.value.dirty=true; resolve(clone(value))}})};
+    command = async id => ({payload: new Uint8Array(id === COMMAND.SAVE_CONFIG ? 16 : 56)});`);
+  assert.equal(run('settingsFooterVisible.value'), false);
+  assert.equal(run('automaticCalibrationPage.value'), true);
+  const applying = run('wizardPrimary()');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(run('wizardActionInProgress.value'), true);
+  await run('wizardPrimary()');
+  assert.equal(run('writes'), 1);
+  assert.equal(run('wizardStep.value'), 'validate-calibration');
+  run('finishWrite()');
+  await applying;
+  assert.equal(run('wizardActionInProgress.value'), false);
+  assert.equal(run('wizardError.value'), '');
+  assert.equal(run('wizardStep.value'), 'save');
+  assert.equal(run('calibrationChanged.value'), false);
+  await run('wizardPrimary()');
+  assert.equal(run('wizardStep.value'), 'complete');
+  assert.equal(run('configInfo.value.dirty'), 0);
+  await run('wizardPrimary()');
+  assert.equal(run('writes'), 1);
 });

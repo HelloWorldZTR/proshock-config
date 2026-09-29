@@ -6,7 +6,10 @@
         <span v-else>Device settings</span>
         <strong>{{ stateLabel }}</strong>
       </div>
-      <button type="button" class="primary" :disabled="state?.disabled" :aria-busy="state?.spinning" @click="performAction">{{ state?.label || "Apply" }}</button>
+      <div class="settings-footer-actions">
+        <slot name="secondary-actions"></slot>
+        <button type="button" class="primary" :disabled="state?.disabled" :aria-busy="state?.spinning" @click="performAction"><slot name="primary-content">{{ state?.label || "Apply" }}</slot></button>
+      </div>
     </div>
   </footer>
 </template>

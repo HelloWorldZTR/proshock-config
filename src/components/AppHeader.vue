@@ -70,7 +70,7 @@
         </div>
       </div>
       <button
-        v-if="!connected || !settingsInFooter"
+        v-if="!connected"
         type="button"
         class="header-state-action"
         :class="`state-${state.mode}`"
@@ -152,7 +152,7 @@ const props = defineProps({
   disconnecting: { type: Boolean, default: false },
   currentPage: { type: String, default: "home" },
   state: { type: Object, required: true },
-  settingsInFooter: Boolean, allowOffline: Boolean,
+  allowOffline: Boolean,
   iapActive: { type: Boolean, default: false },
 });
 const emit = defineEmits([

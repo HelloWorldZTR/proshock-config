@@ -459,6 +459,8 @@ registerLocale("zh-CN", "中文", {
   "Detection has started. Press L2 and R2 fully, then release both; repeat five times. No extra clicks are needed.": "检测已开始。将 L2 和 R2 完全按下再一起松开，重复五次，无需额外点击。",
   "Review and apply calibration": "检查并应用校准",
   "Review the physical bounds, sector coverage, and return stability. Apply updates RAM after automatic firmware and Profile integrity checks.": "检查物理边界、扇区覆盖和回中稳定性。固件与槽位完整性自动检查通过后，应用会更新 RAM。",
+  "Save calibration": "保存校准",
+  "Calibration is applied. Save to keep it after restarting the controller.": "校准已应用，保存后重启手柄仍会保留。",
   "Save to flash": "保存到闪存",
   "Calibration is active in RAM and its runtime state has been verified. Save explicitly commits it through the low-priority A/B flash service.": "校准已在 RAM 中生效且运行状态已验证。保存会通过低优先级 A/B 闪存服务明确提交。",
   "Calibration complete": "校准完成",

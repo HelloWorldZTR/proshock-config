@@ -1,6 +1,6 @@
 <template>
   <main class="app-shell">
-    <div :inert="connectionBlocked || undefined" :aria-hidden="connectionBlocked || undefined" :class="{ 'connection-covered': connectionBlocked }">
+    <div :inert="connectionBlocked || undefined" :aria-hidden="connectionBlocked || undefined" :class="{ 'connection-covered': connectionBlocked, 'settings-footer-page': settingsFooterVisible || automaticCalibrationPage }">
     <div v-if="showSecureNote" class="secure-warning">WebHID requires HTTPS or localhost.</div>
     <AppHeader
       :profiles="profileCards"
@@ -9,12 +9,11 @@
       :selected="selectedProfile"
       :profile-draft-changed="profileChanged"
       :connected="connected"
-      :busy="busy || iapMode"
+      :busy="busy || iapMode || wizardActionInProgress"
       :profile-switch-blocked="hasUnsaved"
       :disconnecting="disconnecting"
       :current-page="iapMode ? 'firmware' : page"
       :state="headerState"
-      :settings-in-footer="settingsFooterVisible"
       :allow-offline="developmentPreview"
       :iap-active="iapMode"
       @navigate="requestPageNavigation"
@@ -41,13 +40,12 @@
     />
     <ConfiguratorPage
       v-else-if="page === 'configurator' && !iapMode"
-      :section="configuratorSection" :selected-profile="selectedProfile" :state-label="stateLabel"
+      :section="configuratorSection" :selected-profile="selectedProfile"
       :profile="profileDraft" :baseline-profile="profileBackup" :pollrate-hz="pollrateHz"
       :boot-profile="bootProfile" :ribbon-mode="ribbonMode" :adc-bits="adcBits" :raw="latestRaw" :snapshot="liveInputSnapshot"
       :calibration="calibrationDraft || defaultCalibration" :config-info="configInfo"
       :connected="connected" :read-digital-input="getDigitalInput"
       :direction-disabled="busy || saveInProgress || calibrationOwnsHeaderActions" @direction="setAnalogDirection"
-      :action-state="settingsActionState"
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
       @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event" @ribbon-mode="setRibbonMode" @adc-bits="setAdcBits"
       @debounce-validity="debounceValid = $event"
@@ -55,15 +53,15 @@
       @response="setResponse" @resolver="setResolver" @button-debounce="setButtonDebounce"
       @stick-shape="setStickShape" @stick-rc="setStickRc"
       @reset-curves="resetCurves" @copy-curve="copyCurve"
-      @calibrate="requestGo('calibration')" @primary-action="handleHeaderAction"
+      @calibrate="requestGo('calibration')"
     />
-    <div v-else-if="page === 'calibration' && !iapMode" class="page calibration-workspace" :class="{ 'settings-footer-page': settingsFooterVisible }">
+    <div v-else-if="page === 'calibration' && !iapMode" class="page calibration-workspace">
       <nav class="subtabs" aria-label="Calibration sections">
         <button type="button" :class="{ active: calibrationSection === 'automatic' }" :disabled="calibrationOwnsHeaderActions" @click="requestGo('calibration', 'automatic')">Automatic calibration</button>
         <button type="button" :class="{ active: calibrationSection === 'manual' }" :disabled="calibrationOwnsHeaderActions" @click="requestGo('calibration', 'manual')">Manual settings</button>
       </nav>
       <div v-if="calibrationSection === 'manual'" class="page manual-bounds-page">
-        <ManualBoundsEditor :calibration="calibrationDraft || defaultCalibration" :errors="calibrationValidation.failures" :action-state="settingsActionState" :state-label="stateLabel" @update="setCalibrationBound" @primary-action="handleHeaderAction">
+        <ManualBoundsEditor :calibration="calibrationDraft || defaultCalibration" :errors="calibrationValidation.failures" @update="setCalibrationBound">
           <template #directions>
             <AnalogDirectionEditor :calibration="calibrationDraft || defaultCalibration" :raw="latestRaw" :legacy-axis-invert="configInfo?.axis_invert" :disabled="busy || saveInProgress || calibrationOwnsHeaderActions" @direction="setAnalogDirection" />
           </template>
@@ -71,7 +69,7 @@
       </div>
     <QuickCalibrationPage
       v-else
-      :step="wizardStep" :busy="busy" :offline="!connected" :error="wizardError" :neutral-result="neutralResult"
+      :step="wizardStep" :busy="busy || saveInProgress || wizardActionInProgress" :offline="!connected" :error="wizardError" :neutral-result="neutralResult"
       :calibration-mode="calibrationMode"
       :center-capture-active="centerCaptureActive" :center-capture-status="centerCaptureStatus"
       :left-range="rangeCaptureActive ? { sectorCounts: rangePreview.leftSectorCounts } : leftRange"
@@ -99,6 +97,8 @@
       :profile="profileDraft" :connected="connected" :device-label="deviceLabel" :logs="logs"
       @section="requestGo('diagnostics', $event)" @export-log="downloadDiagnostics"
     />
+    <SettingsApplyFooter v-if="settingsFooterVisible" :state="settingsActionState" :state-label="stateLabel"
+      :profile="page === 'calibration' ? undefined : selectedProfile" @primary-action="handleHeaderAction" />
     <UnsavedChangesDialog
       v-if="leaveGuardOpen"
       :kind="leaveGuardKind"
@@ -141,6 +141,7 @@ import AnalogDirectionEditor from "./components/AnalogDirectionEditor.vue";
 import { analogAxisInvert, changeAnalogDirection } from "./analog-direction.js";
 import ManualBoundsEditor from "./components/ManualBoundsEditor.vue";
 import AppHeader from "./components/AppHeader.vue";
+import SettingsApplyFooter from "./components/SettingsApplyFooter.vue";
 import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
 import HomePage from "./pages/HomePage.vue";
 import ConfiguratorPage from "./pages/ConfiguratorPage.vue";
@@ -280,6 +281,7 @@ const configuratorSection = ref("system");
 const calibrationSection = ref("automatic");
 const diagnosticsSection = ref("input");
 const toast = ref("");
+const wizardActionInProgress = ref(false);
 const profileFileInput = ref(null);
 const calibrationProfileGuard = ref(null);
 const savedProfileBaseline = ref(null);
@@ -414,7 +416,8 @@ const calibrationWorkflowPending = computed(() => (
 const calibrationOwnsHeaderActions = computed(() => (
   calibrationSection.value === "automatic"
   && (
-    centerCaptureActive.value
+    wizardActionInProgress.value
+    || centerCaptureActive.value
     || !["neutral", "complete"].includes(wizardStep.value)
   )
 ));
@@ -442,7 +445,10 @@ const headerState = computed(() => deriveHeaderState({
     || (calibrationChanged.value && !calibrationDraftCanApply.value),
   hasUnsaved: hasUnsaved.value,
 }));
-const settingsFooterVisible = computed(() => !iapMode.value && (page.value === "configurator" || (page.value === "calibration" && calibrationSection.value === "manual")));
+const automaticCalibrationPage = computed(() => !iapMode.value && page.value === "calibration" && calibrationSection.value === "automatic");
+// Every connected configuration page shares one persistent action bar.
+const settingsFooterVisible = computed(() => !iapMode.value && !automaticCalibrationPage.value
+  && (connected.value || page.value === "configurator" || page.value === "calibration"));
 // The footer uses the same action as the header; offline connection stays in the header.
 const settingsActionState = computed(() => connected.value ? headerState.value : {
   mode: "offline", label: "Apply", action: null, disabled: true, spinning: false,
@@ -1614,6 +1620,7 @@ async function handleCalibrationStageConfirm(raw) {
     || triggerCaptureActive.value
     || busy.value
     || calibrationConfirmActionActive
+    || wizardActionInProgress.value
     || wizardStep.value === "complete"
   ) {
     return false;
@@ -1831,8 +1838,10 @@ async function finishRangeCapture() {
   }
 }
 
+/** @brief Advance calibration once, retaining firmware verification before Save. */
 async function wizardPrimary() {
-  if (!connected.value || busy.value) return;
+  if (!connected.value || busy.value || saveInProgress.value || wizardActionInProgress.value || wizardStep.value === "complete") return;
+  wizardActionInProgress.value = true;
   wizardError.value = "";
   try {
     if (wizardStep.value === "neutral") {
@@ -1873,6 +1882,8 @@ async function wizardPrimary() {
   } catch (error) {
     if (wizardStep.value === "neutral") stopCenterTimer(true);
     wizardError.value = error.message;
+  } finally {
+    wizardActionInProgress.value = false;
   }
 }
 
