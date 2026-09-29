@@ -19,9 +19,9 @@
       <header><h1>Device information</h1><p>Only values exposed by WebHID or the current config protocol are shown.</p></header>
       <dl class="data-list">
         <div><dt>Device</dt><dd>{{ deviceLabel }}</dd></div>
-        <div><dt>Schema / profile / calibration</dt><dd>{{ configInfo?.schema_version ?? "—" }} / {{ profile?.profile_version ?? "—" }} / {{ calibration?.calibration_version ?? "—" }}</dd></div>
+        <div><dt>Schema / profile / calibration</dt><dd>{{ connected ? (configInfo?.schema_version ?? "—") : "—" }} / {{ connected ? (profile?.profile_version ?? "—") : "—" }} / {{ connected ? (calibration?.calibration_version ?? "—") : "—" }}</dd></div>
         <div><dt>Runtime generation / validation flags</dt><dd>{{ snapshot?.runtime_generation ?? "—" }} / {{ snapshot?.validation_flags ?? "—" }}</dd></div>
-        <div><dt>Firmware build</dt><dd :class="{ unsupported: firmwareBuildVersion == null }">{{ firmwareBuildVersion ?? "Update firmware to report build version" }}</dd></div>
+        <div><dt>Firmware build</dt><dd :class="{ unsupported: firmwareBuildVersion == null }">{{ connected ? (firmwareBuildVersion ?? "Update firmware to report build version") : "—" }}</dd></div>
         <div><dt>Board revision / USB speed</dt><dd class="unsupported">Not exposed over WebHID.</dd></div>
       </dl>
     </section>
