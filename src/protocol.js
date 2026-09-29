@@ -81,6 +81,8 @@ export const RAW_SIZE = 20;
 export const DIGITAL_INPUT_SIZE = 8;
 export const PROTOCOL_VERSION = 2;
 export const SCHEMA_VERSION = 11;
+export const FEATURE_RIBBON_HML = 0x00000001;
+export const CAPABILITY_RIBBON_MODE = 0x01;
 export const LEGACY_PROFILE_VERSION = 5;
 export const PREVIOUS_PROFILE_VERSION = 6;
 export const PROFILE_VERSION = 7;
@@ -482,6 +484,8 @@ export function parseConfigInfo(payload) {
     sequence: view.getUint32(16, true),
     pollrate_hz: view.getUint32(20, true),
     feature_flags: view.getUint32(24, true),
+    ribbon_mode: (view.getUint32(24, true) & FEATURE_RIBBON_HML) ? 1 : 0,
+    ribbon_mode_supported: payload.byteLength >= CONFIG_INFO_SIZE && (payload[55] & CAPABILITY_RIBBON_MODE) !== 0,
     axis_invert_mask: payload.byteLength >= CONFIG_INFO_SIZE ? payload[52] & 0x0f : null,
     axis_invert: axisInvert,
     analog_direction_mask: payload.byteLength >= CONFIG_INFO_SIZE && payload[54] >= 2 ? payload[53] : null,

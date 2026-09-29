@@ -15,7 +15,10 @@
         <label class="system-pollrate"><span>Poll rate</span><select :value="pollrateHz" @change="$emit('pollrate', $event.target.value)"><option v-for="rate in [512,1000,2000,4000,8000]" :key="rate" :value="rate">{{ rate >= 1000 ? `${rate / 1000} kHz` : `${rate} Hz` }}</option></select></label>
         <ButtonDebounceControl :model-value="profile?.button_debounce_samples" @update:model-value="$emit('button-debounce', $event)" @validity="$emit('debounce-validity', $event)" />
       </section>
-      <section class="system-group"><h2>Device settings</h2><label class="system-pollrate"><span>Boot profile</span><select :value="bootProfile" @change="$emit('boot-profile', Number($event.target.value))"><option v-for="index in 4" :key="index" :value="index - 1">Slot {{ index }}</option></select></label></section>
+      <section class="system-group"><h2>Device settings</h2>
+        <label class="system-pollrate"><span>Boot profile</span><select :value="bootProfile" @change="$emit('boot-profile', Number($event.target.value))"><option v-for="index in 4" :key="index" :value="index - 1">Slot {{ index }}</option></select></label>
+        <label class="system-pollrate"><span>Ribbon mode</span><div><select aria-label="Ribbon mode" :value="ribbonMode" :disabled="directionDisabled || (connected && !configInfo?.ribbon_mode_supported)" @change="$emit('ribbon-mode', Number($event.target.value))"><option :value="0">Original</option><option :value="1">HML</option></select><p class="ribbon-mode-note">{{ connected && !configInfo?.ribbon_mode_supported ? 'Update firmware to support ribbon mode.' : ribbonMode === 1 ? 'L1 / R1: weak pull-down, active high.' : 'L1 / R1: weak pull-up, active low.' }}</p></div></label>
+      </section>
       <AnalogDirectionEditor :calibration="calibration" :raw="raw" :legacy-axis-invert="configInfo?.axis_invert" :disabled="directionDisabled" @direction="$emit('direction', $event)" />
     </div>
     <div v-else-if="section === 'sticks' || section === 'triggers'" class="editor-split">
@@ -139,11 +142,11 @@ import SettingsApplyFooter from "../components/SettingsApplyFooter.vue";
 
 const props = defineProps({
   section: String, selectedProfile: Number, stateLabel: String, profile: Object,
-  baselineProfile: Object, pollrateHz: String, bootProfile: Number, raw: Object,
+  baselineProfile: Object, pollrateHz: String, bootProfile: Number, ribbonMode: Number, raw: Object,
   snapshot: Object, calibration: Object, configInfo: Object,
   directionDisabled: Boolean, connected: Boolean, readDigitalInput: Function, applyState: Object, canTest: Boolean,
 });
-defineEmits(["direction", "section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "button-debounce", "stick-shape", "stick-rc", "debounce-validity", "reset-curves", "copy-curve", "calibrate", "apply"]);
+defineEmits(["ribbon-mode", "direction", "section", "profile-color", "pollrate", "boot-profile", "response", "resolver", "button-debounce", "stick-shape", "stick-rc", "debounce-validity", "reset-curves", "copy-curve", "calibrate", "apply"]);
 const previewAxisInvert = computed(() => analogAxisInvert(props.calibration, props.configInfo?.axis_invert));
 const tabs = [
   { id: "system", label: "System" }, { id: "sticks", label: "Sticks" },
@@ -161,3 +164,7 @@ const responses = computed(() => props.section === "sticks" ? props.profile?.sti
 const baselineResponses = computed(() => props.section === "sticks" ? props.baselineProfile?.stick_response : props.baselineProfile?.trigger_response);
 const responseLabels = computed(() => props.section === "sticks" ? ["Left stick radial response", "Right stick radial response"] : ["L2 response", "R2 response"]);
 </script>
+
+<style scoped>
+.ribbon-mode-note { color: var(--muted); font-size: 11px; margin: 8px 0 0; line-height: 1.5; }
+</style>

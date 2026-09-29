@@ -48,13 +48,13 @@
       v-else-if="page === 'configurator' && !iapMode"
       :section="configuratorSection" :selected-profile="selectedProfile" :state-label="stateLabel"
       :profile="profileDraft" :baseline-profile="profileBackup" :pollrate-hz="pollrateHz"
-      :boot-profile="bootProfile" :raw="latestRaw" :snapshot="liveInputSnapshot"
+      :boot-profile="bootProfile" :ribbon-mode="ribbonMode" :raw="latestRaw" :snapshot="liveInputSnapshot"
       :calibration="calibrationDraft || defaultCalibration" :config-info="configInfo"
       :connected="connected" :read-digital-input="getDigitalInput"
       :direction-disabled="busy || saveInProgress || calibrationOwnsHeaderActions" @direction="setAnalogDirection"
       :apply-state="configuratorApplyState"
       @section="requestGo('configurator', $event)" @profile-color="setProfileColor"
-      @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event"
+      @pollrate="pollrateHz = $event" @boot-profile="bootProfile = $event" @ribbon-mode="setRibbonMode"
       @debounce-validity="debounceValid = $event"
       :can-test="connected && !hasDraft && !saveInProgress && !!analogSnapshot"
       @response="setResponse" @resolver="setResolver" @button-debounce="setButtonDebounce"
@@ -170,6 +170,7 @@ import {
   ANALOG_CALIBRATION_SIZE,
   BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
   COMMAND,
+  FEATURE_RIBBON_HML,
   CONFIG_STATUS_NAME,
   PROFILE_CHUNK_DATA_SIZE,
   PROFILE_COUNT,
@@ -245,6 +246,7 @@ const configInfo = ref(null);
 const lastStatus = ref(null);
 const selectedProfile = ref(0);
 const bootProfile = ref(0);
+const ribbonMode = ref(0);
 const profileDraft = ref(null);
 const calibrationDraft = ref(null);
 const profileBackup = ref(null);
@@ -373,8 +375,11 @@ const profileColorOnlyChanged = computed(() => {
   draft.color_rgb = clone(profileBackup.value.color_rgb);
   return JSON.stringify(draft) === JSON.stringify(profileBackup.value);
 });
+const draftFeatureFlags = computed(() => ((Number(configInfo.value?.feature_flags || 0) & ~FEATURE_RIBBON_HML)
+  | (ribbonMode.value === 1 ? FEATURE_RIBBON_HML : 0)) >>> 0);
 const globalChanged = computed(() => !!configInfo.value && (
   configInfo.value.boot_profile !== bootProfile.value
+  || (Number(configInfo.value.feature_flags || 0) >>> 0) !== draftFeatureFlags.value
 ));
 const calibrationChanged = computed(() => (
   calibrationDraft.value && calibrationBackup.value
@@ -797,6 +802,13 @@ function setStickRc({ stickIndex, value }) {
   profileDraft.value.stick_rc[stickIndex] = value;
 }
 
+/** @brief Edit device wiring while preserving unsupported firmware and other feature bits. */
+function setRibbonMode(value) {
+  if (![0, 1].includes(value) || busy.value || saveInProgress.value || calibrationOwnsHeaderActions.value) return;
+  if (connected.value && !configInfo.value?.ribbon_mode_supported) return;
+  ribbonMode.value = value;
+}
+
 /** @brief Change global direction and its physical calibration coordinates together. */
 function setAnalogDirection({ channel, inverted }) {
   if (!calibrationDraft.value || busy.value || saveInProgress.value || calibrationOwnsHeaderActions.value) return;
@@ -1182,6 +1194,7 @@ async function refreshAll() {
     lastStatus.value = parseStatus(statusPacket.payload);
     selectedProfile.value = configInfo.value.active_profile;
     bootProfile.value = configInfo.value.boot_profile;
+    ribbonMode.value = (configInfo.value.feature_flags & FEATURE_RIBBON_HML) ? 1 : 0;
     profileDraft.value = await readProfile(selectedProfile.value);
     calibrationDraft.value = await readCalibration();
     profileBackup.value = clone(profileDraft.value);
@@ -1249,7 +1262,7 @@ async function applyDraft() {
       if (globalChanged.value) {
         const packet = await command(
           COMMAND.SET_GLOBAL_CONFIG,
-          makeGlobalConfigPayload(profileDraft.value.pollrate_hz, bootProfile.value, configInfo.value.feature_flags),
+          makeGlobalConfigPayload(profileDraft.value.pollrate_hz, bootProfile.value, draftFeatureFlags.value),
         );
         configInfo.value = parseConfigInfo(packet.payload);
         appliedChangeKinds.value = {
@@ -1345,6 +1358,7 @@ function restoreLocalBaselines() {
   }
   if (configInfo.value) {
     bootProfile.value = configInfo.value.boot_profile;
+    ribbonMode.value = (configInfo.value.feature_flags & FEATURE_RIBBON_HML) ? 1 : 0;
   }
   resetCalibrationProgress();
 }
@@ -1394,6 +1408,7 @@ async function rollbackAppliedChanges() {
     const infoPacket = await command(COMMAND.GET_CONFIG_INFO);
     configInfo.value = parseConfigInfo(infoPacket.payload);
     bootProfile.value = savedGlobalBaseline.value.boot_profile;
+    ribbonMode.value = (savedGlobalBaseline.value.feature_flags & FEATURE_RIBBON_HML) ? 1 : 0;
     profileDraft.value = savedProfileBaseline.value
       ? clone(savedProfileBaseline.value)
       : profileDraft.value;

@@ -37,6 +37,36 @@ function harness() {
   return code => vm.runInContext(code, context);
 }
 
+test('ribbon mode applies a global flag, preserves other flags and leaves profiles/calibration alone', async () => {
+  const run = harness();
+  run('connected.value = true; page.value = "configurator"; configInfo.value = {boot_profile:0, feature_flags:0x80000000, ribbon_mode_supported:true}; let originalProfile = JSON.stringify(profileDraft.value); let originalCalibration = JSON.stringify(calibrationDraft.value); let sentFlags; command = async (id,payload) => {sentFlags = new DataView(payload.buffer).getUint32(8,true); const info = new Uint8Array(56); new DataView(info.buffer).setUint32(24,sentFlags,true); info[55] = 1; return {payload:info}}; pollAnalogSnapshot = async () => {}; setRibbonMode(1)');
+  assert.equal(run('globalChanged.value'), true);
+  assert.equal(run('canApply.value'), true);
+  await run('applyDraft()');
+  assert.equal(run('sentFlags'), 0x80000001);
+  assert.equal(run('globalChanged.value'), false);
+  assert.equal(run('JSON.stringify(profileDraft.value) === originalProfile'), true);
+  assert.equal(run('JSON.stringify(calibrationDraft.value) === originalCalibration'), true);
+  run('setRibbonMode(0)');
+  assert.equal(run('draftFeatureFlags.value'), 0x80000000);
+  run('restoreLocalBaselines()');
+  assert.equal(run('ribbonMode.value'), 1);
+});
+
+test('ribbon mode rejects unsupported firmware and keeps later edits during Apply', async () => {
+  const run = harness();
+  run('connected.value = true; page.value = "configurator"; configInfo.value = {boot_profile:0, feature_flags:0}; setRibbonMode(1)');
+  assert.equal(run('ribbonMode.value'), 0);
+  run('configInfo.value.ribbon_mode_supported = true; setRibbonMode(1); let finish; command = () => new Promise(resolve => {finish = resolve}); pollAnalogSnapshot = async () => {}');
+  const applying = run('applyDraft()');
+  run('ribbonMode.value = 0; const info = new Uint8Array(56); new DataView(info.buffer).setUint32(24,1,true); info[55] = 1; finish({payload:info})');
+  await applying;
+  assert.equal(run('ribbonMode.value'), 0);
+  assert.equal(run('globalChanged.value'), true);
+  run('captureSavedBaselines()');
+  assert.equal(run('savedGlobalBaseline.value.feature_flags'), 1);
+});
+
 test('hardware direction edits are global calibration drafts and preserve profile and ADC data', () => {
   const run = harness();
   run('connected.value = true; page.value = "configurator"; latestRaw.value = {adc:[100,200,300,400,3900,100]}; let originalProfile = JSON.stringify(profileDraft.value); let originalAxis = JSON.stringify(calibrationDraft.value.axis); setAnalogDirection({channel:0,inverted:true}); setAnalogDirection({channel:4,inverted:true})');

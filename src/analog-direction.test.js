@@ -101,6 +101,16 @@ test("config info advertises all six directions only with calibration V2", () =>
   assert.equal(parseConfigInfo(payload).analog_direction_mask, null);
 });
 
+test("config info reports ribbon mode with an explicit capability and legacy defaults", () => {
+  const payload = new Uint8Array(56);
+  assert.equal(parseConfigInfo(payload).ribbon_mode_supported, false);
+  payload[55] = 1;
+  payload[24] = 1;
+  assert.equal(parseConfigInfo(payload).ribbon_mode_supported, true);
+  assert.equal(parseConfigInfo(payload).ribbon_mode, 1);
+  assert.equal(parseConfigInfo(payload.slice(0, 52)).ribbon_mode_supported, false);
+});
+
 test("validation rejects inconsistent trigger direction and unknown mask bits", () => {
   const calibration = calibrationFixture(); calibration.direction_mask = 64;
   assert.equal(validateCalibration(calibration).pass, false);

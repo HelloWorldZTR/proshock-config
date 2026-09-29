@@ -1,6 +1,11 @@
 import { registerLocale } from "../i18n.js";
 
 registerLocale("zh-CN", "中文", {
+  "Ribbon mode": "排线模式",
+  "Original": "原装",
+  "Update firmware to support ribbon mode.": "请更新固件以支持排线模式。",
+  "L1 / R1: weak pull-down, active high.": "L1 / R1：弱下拉，高电平按下。",
+  "L1 / R1: weak pull-up, active low.": "L1 / R1：弱上拉，低电平按下。",
   "Check Hardware directions in Manual settings and Apply before starting calibration.": "开始校准前，请在手动设置中确认硬件方向，并点击应用。",
   "{trigger} direction does not match Hardware directions.": "{trigger} 的读数变化与硬件方向设置不一致。",
   "Preview uses raw ADC and draft directions. Apply before calibration.": "预览使用原始 ADC 和当前草稿方向。校准前请先应用。",
