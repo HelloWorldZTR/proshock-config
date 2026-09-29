@@ -14,7 +14,7 @@ for (const match of descriptor.scriptSetup.content.matchAll(/import\s+\{([^}]+)\
 }
 const source = descriptor.scriptSetup.content.replace(/import\s+[\s\S]*?\s+from\s+"[^"]+";/g, '').replace('import.meta.env.MODE', '"production"');
 /** @brief Run application state without a DOM or physical controller. */
-function harness() {
+function harness({ timers = [] } = {}) {
   const device = { productName: 'Test controller', opened: true };
   class FakeClient {
     device = device;
@@ -24,7 +24,10 @@ function harness() {
   }
   const context = vm.createContext({
     ...imports, WebHidClient: FakeClient, onMounted: () => {}, onUnmounted: () => {},
-    window: { isSecureContext: true, setTimeout: () => 1, clearInterval() {}, clearTimeout() {}, setInterval: () => 1 },
+    window: { isSecureContext: true, setTimeout: callback => {
+      timers.push(callback);
+      return 1;
+    }, clearInterval() {}, clearTimeout() {}, setInterval: () => 1 },
     location: { protocol: 'http:', hash: '' }, history: { replaceState() {} }, document: { activeElement: null }, navigator: {},
   });
   vm.runInContext(source + `
@@ -92,6 +95,54 @@ test('automatic calibration cannot capture with unapplied directions', async () 
   run('calibrationBackup.value = clone(calibrationDraft.value)');
   await run('wizardPrimary()');
   assert.equal(run('captures'), 2);
+});
+
+test('quick calibration starts and captures its center window through the actual App handlers', async () => {
+  const timers = [];
+  const run = harness({ timers });
+  run(`connected.value = true; page.value = "calibration"; wizardStep.value = "neutral";
+    loadAllProfiles = async () => Array.from({length:4}, () => clone(profileBackup.value));
+    let rawSequence = 0;
+    getRaw = async () => ({sequence:++rawSequence, adc:[2048,2050,2046,2044,200,200], buttons:0});`);
+  await run('wizardPrimary()');
+  assert.equal(run('wizardError.value'), '');
+  assert.equal(run('centerCaptureActive.value'), true);
+  assert.equal(run('centerCaptureStatus.value.completed'), 0);
+  // Five settling samples, then sixteen unique samples at rest.
+  for (let sample = 0; sample < 21; sample += 1) {
+    assert.equal(timers.length, 1);
+    await timers.shift()();
+    assert.equal(run('wizardError.value'), '');
+  }
+  assert.equal(run('wizardStep.value'), 'sticks-range');
+  assert.equal(run('centerCaptureActive.value'), false);
+  assert.equal(run('rangeCaptureActive.value'), true);
+  assert.equal(run('centerCaptureStatus.value.completed'), 1);
+  assert.deepEqual(Array.from(run('neutralResult.value.axes.map(axis => axis.center)')), [2048,2050,2046,2044]);
+  run('stopRangeTimer()');
+});
+
+test('failed center startup clears the listening state and permits retry in both modes', async () => {
+  for (const mode of ['quick', 'standard']) {
+    const run = harness();
+    run(`connected.value = true; wizardStep.value = "neutral";
+      calibrationMode.value = "${mode}";
+      loadAllProfiles = async () => Array.from({length:4}, () => clone(profileBackup.value));
+      const originalSyncStatus = syncCenterCaptureStatus;
+      syncCenterCaptureStatus = () => {throw new Error("Center startup failed")};`);
+    await run('wizardPrimary()');
+    assert.equal(run('wizardError.value'), 'Center startup failed');
+    assert.equal(run('centerCaptureActive.value'), false);
+    assert.equal(run('centerCaptureStatus.value.phase'), 'idle');
+    assert.equal(run('centerReturnCapture'), null);
+    run('syncCenterCaptureStatus = originalSyncStatus');
+    await run('wizardPrimary()');
+    assert.equal(run('wizardError.value'), '');
+    assert.equal(run('centerCaptureActive.value'), true);
+    assert.equal(run('centerCaptureStatus.value.mode'), mode);
+    assert.equal(run('centerCaptureStatus.value.completed'), 0);
+    run('stopCenterTimer()');
+  }
 });
 
 test('calibration write uses the connected payload version and carries direction once', async () => {

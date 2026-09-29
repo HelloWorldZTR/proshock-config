@@ -1557,6 +1557,7 @@ async function collectUnique(count) {
   return unique.slice(-count);
 }
 
+/** @brief Publish progress for quick windows and standard return captures. */
 function syncCenterCaptureStatus() {
   const directionIndex = centerReturnCapture?.directionIndex || 0;
   centerCaptureStatus.value = {
@@ -1565,7 +1566,8 @@ function syncCenterCaptureStatus() {
     direction: centerReturnCapture?.mode === "standard"
       ? CENTER_RETURN_DIRECTIONS[directionIndex] || CENTER_RETURN_DIRECTIONS.at(-1)
       : null,
-    completed: centerReturnCapture?.returnWindows.length || 0,
+    // Quick capture has one selected window, without a returnWindows array.
+    completed: centerReturnCapture?.returnWindows?.length || 0,
     readySamples: centerReturnCapture?.recentSamples.length || 0,
   };
 }
@@ -1857,6 +1859,7 @@ async function wizardPrimary() {
       log("Calibration saved and verified by firmware.");
     }
   } catch (error) {
+    if (wizardStep.value === "neutral") stopCenterTimer(true);
     wizardError.value = error.message;
   }
 }
