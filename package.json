@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/assert-board-model-safe.mjs",
     "dev": "vite --host 127.0.0.1",
+    "prebuild": "node scripts/assert-board-model-safe.mjs",
     "build": "vite build",
     "test": "node --test src/*.test.js src/services/*.test.js",
     "preview": "vite preview --host 127.0.0.1",
@@ -12,11 +14,13 @@
     "firmware:pack": "node scripts/firmware-tool.mjs pack",
     "firmware:inspect": "node scripts/firmware-tool.mjs inspect",
     "firmware:factory-image": "node scripts/firmware-tool.mjs factory-image",
+    "prebuild:dev": "node scripts/assert-board-model-safe.mjs",
     "build:dev": "vite build --mode development"
   },
   "dependencies": {
     "@lucide/vue": "^1.20.0",
     "chart.js": "^4.5.1",
+    "three": "^0.186.1",
     "vue": "^3.5.38"
   },
   "devDependencies": {

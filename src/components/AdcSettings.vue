@@ -12,7 +12,7 @@
       </div>
     </div>
     <div class="system-pollrate">
-      <span id="adc-depth-label">Sampling depth</span>
+      <span class="help-label"><span id="adc-depth-label">Sampling depth</span><HelpTip id="R06" /></span>
       <div>
         <div class="adc-depth-control" :class="{ locked: disabled || !supported }">
           <div class="adc-depth-slider">
@@ -43,6 +43,7 @@
 <script setup>
 import { ADC_DEPTH_CODES, ADC_DEPTH_OPTIONS } from '../protocol.js';
 import { computed } from 'vue';
+import HelpTip from './HelpTip.vue';
 const props = defineProps({ bits: {type:Number, default:12}, supported:Boolean, disabled:Boolean });
 const emit = defineEmits(['update']);
 const index = computed(() => Math.max(0, ADC_DEPTH_OPTIONS.indexOf(props.bits)));

@@ -468,6 +468,16 @@ test('Diagnostics opens Device Info while an explicit monitor link still works',
   assert.equal(run('parseRouteHash("#/diagnostics/input").section'), 'input');
 });
 
+test('Accessory Center has its own route and links to the current Profile buttons', () => {
+  const run = harness();
+  run('page.value = "home"; requestPageNavigation("accessories")');
+  assert.equal(run('currentRouteHash'), '#/accessories');
+  assert.equal(run('parseRouteHash("#/accessories").page'), 'accessories');
+  run('requestGo("configurator", "buttons")');
+  assert.equal(run('configuratorSection.value'), 'buttons');
+  assert.equal(run('currentRouteHash'), '#/configurator/slot/1/buttons');
+});
+
 test('optional build query reads new firmware and tolerates the legacy BAD_COMMAND response', async () => {
   const run = harness();
   run(`scheduler.enqueue = operation => operation();

@@ -135,6 +135,7 @@ test("macro editing and recording feedback are localized without translating con
 
 test("initial locale follows supported browser preferences unless manually selected", () => {
   assert.equal(selectInitialLocale("", ["zh-CN", "en-US"]), "zh-CN");
+  assert.equal(selectInitialLocale("auto", ["zh-CN", "en-US"]), "zh-CN");
   assert.equal(selectInitialLocale("", ["en-US", "zh-CN"]), "en");
   assert.equal(selectInitialLocale("", ["fr-FR", "zh-TW"]), "zh-CN");
   assert.equal(selectInitialLocale("en", ["zh-CN"]), "en");

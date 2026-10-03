@@ -4,6 +4,7 @@ const STORAGE_KEY = "proshock4.webhid.locale";
 const DEFAULT_LOCALE = "en";
 const TRANSLATED_ATTRIBUTES = ["aria-label", "placeholder", "title"];
 const locale = ref(DEFAULT_LOCALE);
+const localeMode = ref("auto");
 const localeRegistry = new Map();
 const textState = new WeakMap();
 const attributeState = new WeakMap();
@@ -114,12 +115,28 @@ function applyLocale() {
 }
 
 export function setLocale(nextLocale) {
-  locale.value = resolveLocale(nextLocale) || DEFAULT_LOCALE;
+  localeMode.value = nextLocale === "auto" ? "auto" : resolveLocale(nextLocale) || DEFAULT_LOCALE;
+  locale.value = localeMode.value === "auto"
+    ? selectInitialLocale("", browserLanguages())
+    : localeMode.value;
   try {
-    window.localStorage.setItem(STORAGE_KEY, locale.value);
+    if (localeMode.value === "auto") window.localStorage.removeItem(STORAGE_KEY);
+    else window.localStorage.setItem(STORAGE_KEY, localeMode.value);
   } catch {
     // Storage may be unavailable in private mode; the live selection still works.
   }
+  applyLocale();
+}
+
+/** @brief Read browser preferences in their declared priority order. */
+function browserLanguages() {
+  return [...(navigator.languages || []), navigator.language];
+}
+
+/** @brief Refresh automatic language selection when browser preferences change. */
+export function refreshBrowserLocale() {
+  if (localeMode.value !== "auto") return;
+  locale.value = selectInitialLocale("", browserLanguages());
   applyLocale();
 }
 
@@ -140,8 +157,10 @@ export function initializeI18n() {
   } catch {
     preferred = "";
   }
-  locale.value = selectInitialLocale(preferred, [...(navigator.languages || []), navigator.language]);
+  localeMode.value = resolveLocale(preferred) || "auto";
+  locale.value = selectInitialLocale(preferred, browserLanguages());
   document.documentElement.lang = locale.value;
+  window.addEventListener("languagechange", refreshBrowserLocale);
 }
 
 /** Keep Vue-rendered text and accessibility attributes synchronized to locale. */
@@ -166,6 +185,7 @@ export function mountI18n(root) {
 }
 
 export const currentLocale = readonly(locale);
+export const currentLocaleMode = readonly(localeMode);
 export const availableLocales = () => [...localeRegistry.values()].map(({ code, nativeName }) => ({
   code,
   nativeName,

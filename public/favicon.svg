@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ProShock 4">
+  <rect width="64" height="64" rx="15" fill="#0B1627"/>
+  <path fill="#F7FBFF" fill-rule="evenodd" d="M16 51V13h20c12 0 19 6 19 17S48 47 36 47h-9v4H16Zm11-15h9c5 0 8-2 8-6s-3-6-8-6h-9v12Z"/>
+  <path d="m39 51 15-15" fill="none" stroke="#55D6FF" stroke-width="6" stroke-linecap="square"/>
+</svg>

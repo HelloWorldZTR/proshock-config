@@ -21,13 +21,16 @@
               <div>
                 <h2>{{ selectedStick === 0 ? "Left stick" : "Right stick" }}</h2>
               </div>
-              <span class="rc-stick-index">S{{ selectedStick + 1 }}</span>
+              <div class="rc-stick-actions">
+                <button type="button" class="rc-reset-button" aria-label="Restore RC defaults" title="Restore RC defaults" :disabled="isDefaultRc(selectedRc)" @click="resetSelectedRc"><RotateCcw :size="13" aria-hidden="true" /><span>Restore RC defaults</span></button>
+                <span class="rc-stick-index">S{{ selectedStick + 1 }}</span>
+              </div>
             </header>
 
             <section class="rc-stage-card">
               <div class="rc-stage-heading">
                 <div>
-                  <strong>Smoothing</strong>
+                  <div class="help-label"><strong>Smoothing</strong><HelpTip id="R12" /></div>
                   <p>Low-pass filtering removes electromagnetic high-frequency noise.</p>
                 </div>
                 <label class="rc-stage-switch">
@@ -53,7 +56,7 @@
             <section class="rc-stage-card">
               <div class="rc-stage-heading">
                 <div>
-                  <strong>Boost</strong>
+                  <div class="help-label"><strong>Boost</strong><HelpTip id="R13" /></div>
                   <p>A band-limited derivative adds motion energy without passing the highest-frequency calculation jitter.</p>
                 </div>
                 <label class="rc-stage-switch">
@@ -70,6 +73,7 @@
               </div>
               <RcFrequencyControl
                 label="Fast cutoff"
+                help-id="R14"
                 :disabled="!hasFlag(selectedRc, STICK_RC_FLAG_BOOST)"
                 :alpha-q15="selectedRc.boost_fast_alpha_q15"
                 :minimum-hz="slowHz(selectedRc) + 1"
@@ -82,13 +86,14 @@
                 :maximum-hz="fastHz(selectedRc) - 1"
                 @update="setCutoff(selectedStick, 'boost_slow_alpha_q15', $event)"
               />
-              <label class="rc-control-row">
+              <div class="rc-control-row">
                 <span>
-                  <strong>Boost gain</strong>
+                  <span class="help-label"><strong>Boost gain</strong><HelpTip id="R15" /></span>
                   <small>{{ gainText(selectedRc) }}</small>
                 </span>
                 <input
                   type="range"
+                  aria-label="Boost gain"
                   min="0"
                   max="2"
                   step="0.01"
@@ -99,6 +104,7 @@
                 <input
                   class="rc-number-input"
                   type="number"
+                  aria-label="Boost gain exact value"
                   min="0"
                   max="2"
                   step="0.01"
@@ -106,7 +112,7 @@
                   :value="(selectedRc.boost_gain_q8_8 / 256).toFixed(2)"
                   @change="setGain(selectedStick, $event.target.value)"
                 >
-              </label>
+              </div>
             </section>
           </article>
         </StickPanelTransition>
@@ -155,6 +161,7 @@ import {
   PointElement,
   Tooltip,
 } from "chart.js";
+import { RotateCcw } from "@lucide/vue";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   STICK_RC_FLAG_BOOST,
@@ -173,6 +180,7 @@ import StickPanelTransition from "./StickPanelTransition.vue";
 import CompetitiveRiskWarning from "./CompetitiveRiskWarning.vue";
 import InputViewer from "./InputViewer.vue";
 import RcFrequencyControl from "./RcFrequencyControl.vue";
+import HelpTip from "./HelpTip.vue";
 import { currentLocale, translate } from "../i18n.js";
 
 Chart.register(
@@ -222,6 +230,18 @@ function gainText(rc) {
 
 function emitRc(stickIndex, value) {
   emit("update", { stickIndex, value });
+}
+
+/** @brief Compare the selected stick against the firmware's default RC settings. */
+function isDefaultRc(value) {
+  const defaults = createDefaultStickRc();
+  return ["flags", "smoothing_alpha_q15", "boost_fast_alpha_q15", "boost_slow_alpha_q15", "boost_gain_q8_8"]
+    .every((field) => value?.[field] === defaults[field]);
+}
+
+/** @brief Restore only the selected stick's RC draft; Apply and Save stay explicit. */
+function resetSelectedRc() {
+  if (!isDefaultRc(selectedRc.value)) emitRc(selectedStick.value, createDefaultStickRc());
 }
 
 function setFlag(stickIndex, flag, enabled) {

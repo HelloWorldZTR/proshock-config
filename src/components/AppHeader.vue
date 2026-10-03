@@ -64,8 +64,11 @@
           <Globe class="icon" />
         </button>
         <div v-if="languageOpen" class="more-menu header-more-menu language-menu" role="menu" aria-label="Language">
-          <button v-for="item in locales" :key="item.code" type="button" role="menuitemradio" :aria-checked="currentLocale === item.code" :class="{ selected: currentLocale === item.code }" @click="selectLanguage(item.code)">
-            <span>{{ item.nativeName }}</span><Check v-if="currentLocale === item.code" class="menu-icon" />
+          <button type="button" role="menuitemradio" :aria-checked="currentLocaleMode === 'auto'" :class="{ selected: currentLocaleMode === 'auto' }" @click="selectLanguage('auto')">
+            <span>{{ currentLocale === 'zh-CN' ? '跟随浏览器' : 'Browser language' }}</span><Check v-if="currentLocaleMode === 'auto'" class="menu-icon" />
+          </button>
+          <button v-for="item in locales" :key="item.code" type="button" role="menuitemradio" :aria-checked="currentLocaleMode === item.code" :class="{ selected: currentLocaleMode === item.code }" @click="selectLanguage(item.code)">
+            <span>{{ item.nativeName }}</span><Check v-if="currentLocaleMode === item.code" class="menu-icon" />
           </button>
         </div>
       </div>
@@ -127,6 +130,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   Activity,
+  Blocks,
   Check,
   Globe,
   ChevronDown,
@@ -138,7 +142,7 @@ import {
   SlidersHorizontal,
   UploadCloud,
 } from "@lucide/vue";
-import { availableLocales, currentLocale, setLocale } from "../i18n.js";
+import { availableLocales, currentLocale, currentLocaleMode, setLocale } from "../i18n.js";
 
 const props = defineProps({
   profiles: { type: Array, required: true },
@@ -184,6 +188,7 @@ const navigation = [
   { id: "configurator", label: "Configurator", shortLabel: "Config", icon: SlidersHorizontal },
   { id: "calibration", label: "Analog Calibration", shortLabel: "Calibrate", icon: Gauge },
   { id: "firmware", label: "Firmware Upgrade", shortLabel: "Upgrade", icon: UploadCloud },
+  { id: "accessories", label: "Accessory Center", shortLabel: "Accessories", icon: Blocks },
   { id: "diagnostics", label: "Diagnostics", shortLabel: "Diagnostics", icon: Activity },
 ];
 

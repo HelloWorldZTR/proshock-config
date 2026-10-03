@@ -1,7 +1,7 @@
 <template>
   <section class="curve-editor">
     <div class="response-head">
-      <strong>{{ label }}</strong>
+      <div class="help-label"><strong>{{ label }}</strong><HelpTip v-if="showHelp" id="R10" /></div>
       <select :value="preset" @change="applyPreset($event.target.value)">
         <option value="linear">Linear</option>
         <option value="centerPrecise">Center Precise</option>
@@ -11,28 +11,30 @@
       </select>
     </div>
     <div class="deadzone-grid">
-      <label>
-        <span>Inner deadzone {{ percent(modelValue.inner_deadzone_q15) }}%</span>
+      <div class="deadzone-setting">
+        <div class="help-label"><span>Inner deadzone {{ percent(modelValue.inner_deadzone_q15) }}%</span><HelpTip v-if="showHelp" id="R08" /></div>
         <input
           type="range"
+          :aria-label="`${label} inner deadzone`"
           min="0"
           max="40"
           step="0.1"
           :value="percent(modelValue.inner_deadzone_q15)"
           @input="setDeadzone('inner_deadzone_q15', $event.target.value)"
         >
-      </label>
-      <label>
-        <span>Outer deadzone {{ percent(modelValue.outer_deadzone_q15) }}%</span>
+      </div>
+      <div class="deadzone-setting">
+        <div class="help-label"><span>Outer deadzone {{ percent(modelValue.outer_deadzone_q15) }}%</span><HelpTip v-if="showHelp" id="R09" /></div>
         <input
           type="range"
+          :aria-label="`${label} outer deadzone`"
           min="0"
           max="40"
           step="0.1"
           :value="percent(modelValue.outer_deadzone_q15)"
           @input="setDeadzone('outer_deadzone_q15', $event.target.value)"
         >
-      </label>
+      </div>
     </div>
     <div class="curve-chart-shell">
       <svg
@@ -131,11 +133,13 @@
 import { computed, ref } from "vue";
 import { Q15_ONE } from "./protocol.js";
 import { CURVE_PRESETS, curvePresetToQ15, validateResponse } from "./calibration.js";
+import HelpTip from "./components/HelpTip.vue";
 
 const props = defineProps({
   label: { type: String, required: true },
   modelValue: { type: Object, required: true },
   baselineValue: { type: Object, default: null },
+  showHelp: { type: Boolean, default: false },
 });
 const emit = defineEmits(["update:modelValue"]);
 const chart = ref(null);

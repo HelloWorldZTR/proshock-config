@@ -9,12 +9,12 @@
     <div v-if="section === 'system' || section === 'general'" class="system-settings">
       <header class="page-heading"><h1>System</h1><p>Profile input timing and device startup settings.</p></header>
       <section class="system-group"><h2>Current Profile</h2>
-        <label class="system-pollrate"><span>Poll rate</span><select :value="pollrateHz" @change="$emit('pollrate', $event.target.value)"><option v-for="rate in [512,1000,2000,4000,8000]" :key="rate" :value="rate">{{ rate >= 1000 ? `${rate / 1000} kHz` : `${rate} Hz` }}</option></select></label>
+        <div class="system-pollrate"><div class="help-label"><label for="profile-poll-rate">Poll rate</label><HelpTip id="R02" /></div><select id="profile-poll-rate" :value="pollrateHz" @change="$emit('pollrate', $event.target.value)"><option v-for="rate in [512,1000,2000,4000,8000]" :key="rate" :value="rate">{{ rate >= 1000 ? `${rate / 1000} kHz` : `${rate} Hz` }}</option></select></div>
         <ButtonDebounceControl :model-value="profile?.button_debounce_samples" @update:model-value="$emit('button-debounce', $event)" @validity="$emit('debounce-validity', $event)" />
       </section>
       <section class="system-group"><h2>Device settings</h2>
-        <label class="system-pollrate"><span>Boot profile</span><select :value="bootProfile" @change="$emit('boot-profile', Number($event.target.value))"><option v-for="index in 4" :key="index" :value="index - 1">Slot {{ index }}</option></select></label>
-        <label class="system-pollrate"><span>Ribbon mode</span><div><select aria-label="Ribbon mode" :value="ribbonMode" :disabled="directionDisabled || (connected && !configInfo?.ribbon_mode_supported)" @change="$emit('ribbon-mode', Number($event.target.value))"><option :value="0">Original</option><option :value="1">HML</option></select></div></label>
+        <div class="system-pollrate"><div class="help-label"><label for="boot-profile">Boot profile</label><HelpTip id="R04" /></div><select id="boot-profile" :value="bootProfile" @change="$emit('boot-profile', Number($event.target.value))"><option v-for="index in 4" :key="index" :value="index - 1">Slot {{ index }}</option></select></div>
+        <div class="system-pollrate"><div class="help-label"><label for="ribbon-mode">Ribbon mode</label><HelpTip id="R05" /></div><div><select id="ribbon-mode" :value="ribbonMode" :disabled="directionDisabled || (connected && !configInfo?.ribbon_mode_supported)" @change="$emit('ribbon-mode', Number($event.target.value))"><option :value="0">Original</option><option :value="1">HML</option></select></div></div>
       </section>
       <AdcSettings :bits="adcBits" :supported="!connected || configInfo?.adc_depth_supported" :disabled="directionDisabled" @update="$emit('adc-bits', $event)" />
       <AnalogDirectionEditor :calibration="calibration" :raw="raw" :legacy-axis-invert="configInfo?.axis_invert" :disabled="directionDisabled" @direction="$emit('direction', $event)" />
@@ -32,6 +32,7 @@
             :label="responseLabels[index]"
             :model-value="response"
             :baseline-value="baselineResponses?.[index]"
+            :show-help="section === 'sticks'"
             @update:model-value="$emit('response', { kind: section, index, value: $event })"
           />
         </div>
@@ -136,6 +137,7 @@ import RCFilterEditor from "../components/RCFilterEditor.vue";
 import ResolverEditor from "../components/ResolverEditor.vue";
 import StickRoundnessEditor from "../components/StickRoundnessEditor.vue";
 import ButtonDebounceControl from "../components/ButtonDebounceControl.vue";
+import HelpTip from "../components/HelpTip.vue";
 
 const props = defineProps({
   section: String, selectedProfile: Number, profile: Object,

@@ -5,6 +5,7 @@
         <span v-if="profile !== undefined">Slot {{ profile + 1 }}</span>
         <span v-else>Device settings</span>
         <strong>{{ stateLabel }}</strong>
+        <HelpTip id="R01" />
       </div>
       <div class="settings-footer-actions">
         <slot name="secondary-actions"></slot>
@@ -14,6 +15,7 @@
   </footer>
 </template>
 <script setup>
+import HelpTip from "./HelpTip.vue";
 const props = defineProps({ state: Object, stateLabel: { type: String, default: "Current settings" }, profile: Number });
 const emit = defineEmits(["primary-action"]);
 /** @brief Dispatch only the currently available Apply or Save action. */

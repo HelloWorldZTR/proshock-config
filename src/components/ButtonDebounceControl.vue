@@ -1,6 +1,6 @@
 <template>
   <div class="debounce-control">
-    <div class="setting-label"><strong>Button debounce</strong><small>All digital buttons in the current Profile</small></div>
+    <div class="setting-label"><div class="help-label"><strong>Button debounce</strong><HelpTip id="R03" /></div><small>All digital buttons in the current Profile</small></div>
     <div class="debounce-inputs">
       <div class="debounce-slider">
         <input type="range" min="1" max="32" step="1" :value="samples" aria-label="Button debounce duration" @input="setSamples(Number($event.target.value))">
@@ -19,6 +19,7 @@
 <script setup>
 import { computed, onUnmounted, ref } from "vue";
 import { normalizeButtonDebounceSamples } from "../protocol.js";
+import HelpTip from "./HelpTip.vue";
 const props = defineProps({ modelValue: Number });
 const emit = defineEmits(["update:modelValue", "validity"]);
 const error = ref("");

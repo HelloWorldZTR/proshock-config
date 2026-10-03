@@ -4,6 +4,7 @@ import { initializeI18n, mountI18n } from "./i18n.js";
 import "./locales/zh-CN.js";
 import "./styles.css";
 import "./ui-corrections.css";
+import "./help.css";
 
 initializeI18n();
 createApp(App).mount("#app");

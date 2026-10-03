@@ -1,6 +1,6 @@
 <template>
   <section class="analog-directions">
-    <header><h2>Hardware directions</h2><p>Move right/down, press triggers. If the preview is reversed, turn on Invert.</p></header>
+    <header><div class="help-label"><h2>Hardware directions</h2><HelpTip id="R07" /></div><p>Move right/down, press triggers. If the preview is reversed, turn on Invert.</p></header>
     <p v-if="!supported" class="support-note">Update firmware to support configurable analog directions.</p>
     <div class="editor-split direction-split">
       <div class="direction-fields">
@@ -40,6 +40,7 @@ import { computed } from "vue";
 import { normalizeAxis, normalizedTrigger } from "../calibration.js";
 import { analogAxisInvert } from "../analog-direction.js";
 import StickRoundnessPreview from "./StickRoundnessPreview.vue";
+import HelpTip from "./HelpTip.vue";
 
 const props = defineProps({ calibration: Object, raw: Object, legacyAxisInvert: Array, disabled: Boolean });
 defineEmits(["direction"]);

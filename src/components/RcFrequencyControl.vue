@@ -1,11 +1,12 @@
 <template>
-  <label class="rc-control-row">
+  <div class="rc-control-row">
     <span>
-      <strong>{{ label }}</strong>
+      <span class="help-label"><strong>{{ label }}</strong><HelpTip v-if="helpId" :id="helpId" /></span>
       <small>{{ roundedHz }} Hz · α {{ normalizedAlpha }}</small>
     </span>
     <input
       type="range"
+      :aria-label="label"
       :min="boundedMinimum"
       :max="boundedMaximum"
       step="1"
@@ -16,6 +17,7 @@
     <input
       class="rc-number-input"
       type="number"
+      :aria-label="`${label} exact value`"
       :min="boundedMinimum"
       :max="boundedMaximum"
       step="1"
@@ -23,11 +25,12 @@
       :value="roundedHz"
       @change="$emit('update', Number($event.target.value))"
     >
-  </label>
+  </div>
 </template>
 
 <script setup>
 import { computed } from "vue";
+import HelpTip from "./HelpTip.vue";
 import {
   RC_MAX_CUTOFF_HZ,
   RC_MIN_CUTOFF_HZ,
@@ -36,6 +39,7 @@ import {
 
 const props = defineProps({
   label: { type: String, required: true },
+  helpId: { type: String, default: "" },
   disabled: { type: Boolean, default: false },
   alphaQ15: { type: Number, required: true },
   minimumHz: { type: Number, default: RC_MIN_CUTOFF_HZ },

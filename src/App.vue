@@ -90,6 +90,14 @@
       @iap-session="handleIapSession"
       @gate-state="iapGate = $event"
     />
+    <AccessoryCenterPage
+      v-else-if="page === 'accessories'"
+      :ribbon-mode="ribbonMode" :calibration="calibrationDraft || defaultCalibration"
+      :config-info="configInfo" :connected="connected"
+      :disabled="busy || saveInProgress || calibrationOwnsHeaderActions"
+      @ribbon-mode="setRibbonMode" @direction="setAnalogDirection"
+      @buttons="requestGo('configurator', 'buttons')"
+    />
     <DiagnosticsPage
       v-else
       :section="diagnosticsSection" :raw="latestRaw" :snapshot="liveInputSnapshot"
@@ -150,6 +158,7 @@ import QuickCalibrationPage from "./pages/QuickCalibrationPage.vue";
 import CalibrationSafetyDialog from "./components/CalibrationSafetyDialog.vue";
 import FirmwareUpgradePage from "./pages/FirmwareUpgradePage.vue";
 import DiagnosticsPage from "./pages/DiagnosticsPage.vue";
+import AccessoryCenterPage from "./pages/AccessoryCenterPage.vue";
 import { cloneConfigData } from "./clone-data.js";
 import {
   exportBackup,
@@ -369,6 +378,7 @@ const navigation = [
   { id: "configurator", label: "Configurator" },
   { id: "calibration", label: "Analog Calibration" },
   { id: "firmware", label: "Firmware Upgrade" },
+  { id: "accessories", label: "Accessory Center" },
   { id: "diagnostics", label: "Diagnostics" },
 ];
 const profileChanged = computed(() => (
