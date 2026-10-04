@@ -25,7 +25,7 @@ const pinElements = [];
 const pins = [
   { id: "six", number: "01", label: "6-pin expansion connector FPC4", x: 924, y: 247, z: -3.5 },
   { id: "daughter", number: "02", label: "Expansion button connector FPC3", x: 1265, y: 510, z: -5.0 },
-  { id: "u18", number: "03", label: "U18 Bluetooth position", x: 710, y: 747, z: -1.6 },
+  { id: "u18", number: "03", label: "U18 onboard expansion", x: 710, y: 747, z: -1.6 },
   { id: "wide", number: "04", label: "16-pin ribbon FPC2", x: 1114, y: 247, z: -3.5 },
   { id: "pads", number: "05", label: "K1 through K8 pads", x: 76, y: 810, z: -1.6 },
 ];

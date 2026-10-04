@@ -95,6 +95,10 @@
       :ribbon-mode="ribbonMode" :calibration="calibrationDraft || defaultCalibration"
       :config-info="configInfo" :connected="connected"
       :disabled="busy || saveInProgress || calibrationOwnsHeaderActions"
+      :motion="motionDraft" :motion-supported="motionSupported" :motion-telemetry="motionTelemetry"
+      :motion-calibration="motionCalibration"
+      @motion="setMotionDraft" @motion-refresh="refreshMotionStatus"
+      @motion-calibrate="startMotionCalibration" @motion-cancel="cancelMotionCalibration"
       @ribbon-mode="setRibbonMode" @direction="setAnalogDirection"
       @buttons="requestGo('configurator', 'buttons')"
     />
@@ -158,6 +162,8 @@ import QuickCalibrationPage from "./pages/QuickCalibrationPage.vue";
 import CalibrationSafetyDialog from "./components/CalibrationSafetyDialog.vue";
 import FirmwareUpgradePage from "./pages/FirmwareUpgradePage.vue";
 import DiagnosticsPage from "./pages/DiagnosticsPage.vue";
+import { MOTION_MIN_BUILD, MOTION_GET, MOTION_SET, validMotion, encodeMotion, parseMotion, motionChanged } from "./motion.js";
+import { captureGyroBias } from "./motion-calibration.js";
 import AccessoryCenterPage from "./pages/AccessoryCenterPage.vue";
 import { cloneConfigData } from "./clone-data.js";
 import {
@@ -253,6 +259,15 @@ const iapMode = ref(false);
 const deviceLabel = ref("Disconnected");
 const configInfo = ref(null);
 const firmwareBuildVersion = ref(null);
+const motionDraft = ref(null);
+const motionBackup = ref(null);
+const savedMotionBaseline = ref(null);
+const motionTelemetry = ref(null);
+const motionCalibration = ref({ phase: 'idle' });
+const motionCalibrationActive = computed(() => ['settling', 'sampling'].includes(motionCalibration.value.phase));
+let motionCalibrationToken = 0;
+const motionSupported = computed(() => Number.isInteger(firmwareBuildVersion.value) && firmwareBuildVersion.value >= MOTION_MIN_BUILD);
+const motionDraftChanged = computed(() => motionSupported.value && motionChanged(motionDraft.value, motionBackup.value));
 const lastStatus = ref(null);
 const selectedProfile = ref(0);
 const bootProfile = ref(0);
@@ -308,6 +323,7 @@ const appliedChangeKinds = ref({
   profile: false,
   calibration: false,
   global: false,
+  motion: false,
 });
 const savedBaselineAvailable = ref(false);
 const leaveGuardOpen = ref(false);
@@ -411,10 +427,10 @@ const calibrationDraftCanApply = computed(() => (
   calibrationChanged.value && (page.value !== "calibration" || calibrationSection.value === "manual")
 ));
 const hasApplyDraft = computed(() => (
-  profileChanged.value || globalChanged.value || calibrationDraftCanApply.value
+  profileChanged.value || globalChanged.value || calibrationDraftCanApply.value || motionDraftChanged.value
 ));
-const hasDraft = computed(() => profileChanged.value || globalChanged.value || calibrationChanged.value);
-const applyValid = computed(() => debounceValid.value && responseValid.value && resolverValid.value && rcValid.value && calibrationValidation.value.pass);
+const hasDraft = computed(() => profileChanged.value || globalChanged.value || calibrationChanged.value || motionDraftChanged.value);
+const applyValid = computed(() => (!motionDraftChanged.value || validMotion(motionDraft.value)) && debounceValid.value && responseValid.value && resolverValid.value && rcValid.value && calibrationValidation.value.pass);
 const canApply = computed(() => (
   connected.value
   && !busy.value && !saveInProgress.value && !calibrationOwnsHeaderActions.value
@@ -487,6 +503,7 @@ const appliedRollbackRequired = computed(() => (
   appliedChangeKinds.value.profile
   || appliedChangeKinds.value.calibration
   || appliedChangeKinds.value.global
+  || appliedChangeKinds.value.motion
 ));
 const canDiscardAndLeave = computed(() => {
   if (
@@ -646,6 +663,7 @@ function routeHash(nextPage, section = null) {
 }
 
 function performGo(nextPage, section = null) {
+  if (nextPage !== 'accessories') cancelMotionCalibration();
   if (calibrationSafetyOpen.value && (nextPage !== "calibration" || (section && section !== "automatic"))) closeCalibrationSafety();
   if (
     nextPage === "calibration"
@@ -827,7 +845,66 @@ function setStickRc({ stickIndex, value }) {
   profileDraft.value.stick_rc[stickIndex] = value;
 }
 
-/** @brief Edit device wiring while preserving unsupported firmware and other feature bits. */
+/** @brief Gate optional sensor drafts by actual device build and operation ownership. */
+function setMotionDraft(value) {
+  if (!connected.value || !motionSupported.value || busy.value || saveInProgress.value || calibrationOwnsHeaderActions.value) return;
+  motionDraft.value = clone(value);
+}
+/** @brief Refresh runtime sensor state without replacing unsent filter edits. */
+async function refreshMotionStatus() {
+  if (!connected.value || !motionSupported.value || busy.value || saveInProgress.value) return;
+  return runBusyOperation(async () => {
+    try { motionTelemetry.value = parseMotion((await command(MOTION_GET)).payload); }
+    catch (error) { notify(error.message); }
+  });
+}
+
+/** @brief Cancel collection; pending reads may finish but cannot change the draft. */
+function cancelMotionCalibration(message = null) {
+  if (!motionCalibrationActive.value) return;
+  motionCalibrationToken += 1;
+  motionCalibration.value = message ? { phase: 'error', message } : { phase: 'idle' };
+}
+
+/** @brief Guide stillness capture and stage only gyro offsets for Apply then Save. */
+async function startMotionCalibration() {
+  if (!connected.value || !motionSupported.value || !motionDraft.value?.enabled
+    || busy.value || saveInProgress.value || calibrationOwnsHeaderActions.value) return;
+  if (!motionBackup.value?.enabled) {
+    motionCalibration.value = { phase: 'error', message: 'Sensor is not streaming. Apply Motion sensor and retry.' };
+    return;
+  }
+  const token = ++motionCalibrationToken;
+  const device = client.device;
+  const draft = clone(motionDraft.value);
+  const cancelled = () => token !== motionCalibrationToken;
+  return runBusyOperation(async () => {
+    try {
+      const gyro_bias = await captureGyroBias({
+        now: () => Date.now(),
+        wait: ms => new Promise(resolve => window.setTimeout(resolve, ms)),
+        cancelled,
+        onProgress: state => { motionCalibration.value = state; },
+        readSample: async () => {
+          if (!connected.value || client.device !== device) throw new Error('Controller disconnected. Retry calibration.');
+          if (document.hidden) throw new Error('Keep this tab visible and retry calibration.');
+          const sensor = parseMotion((await command(MOTION_GET, new Uint8Array(), false)).payload);
+          if (!cancelled()) motionTelemetry.value = sensor;
+          return sensor;
+        },
+      });
+      if (cancelled()) return;
+      if (!connected.value || client.device !== device) throw new Error('Controller disconnected. Retry calibration.');
+      if (JSON.stringify(motionDraft.value) !== JSON.stringify(draft)) throw new Error('Motion settings changed. Retry calibration.');
+      motionDraft.value = { ...motionDraft.value, gyro_bias };
+      motionCalibration.value = { phase: 'success', message: 'Gyro calibration complete. Apply and Save to keep the result.' };
+    } catch (error) {
+      if (!cancelled()) motionCalibration.value = { phase: 'error', message: error.message };
+    }
+  });
+}
+
+/** @brief Edit ribbon wiring without altering other feature bits. */
 function setRibbonMode(value) {
   if (![0, 1].includes(value) || busy.value || saveInProgress.value || calibrationOwnsHeaderActions.value) return;
   if (connected.value && !configInfo.value?.ribbon_mode_supported) return;
@@ -894,7 +971,7 @@ async function loadAllProfiles() {
 async function downloadBackup() {
   try {
     const profiles = allProfiles.value.length === PROFILE_COUNT ? allProfiles.value : await loadAllProfiles();
-    downloadJson("proshock-device.proshock-backup.json", exportBackup(configInfo.value, profiles, calibrationDraft.value));
+    downloadJson("proshock-device.proshock-backup.json", exportBackup(configInfo.value, profiles, calibrationDraft.value, motionSupported.value ? motionDraft.value : null));
     notify("Full device backup exported.");
   } catch (error) {
     log(error.message);
@@ -1100,6 +1177,7 @@ async function writeProfileColor() {
 
 /** @brief Capture only configuration acknowledged by the controller. */
 function captureSavedBaselines(available = true) {
+  savedMotionBaseline.value = motionBackup.value ? clone(motionBackup.value) : null;
   savedProfileBaseline.value = profileBackup.value
     ? clone(profileBackup.value)
     : null;
@@ -1117,6 +1195,7 @@ function captureSavedBaselines(available = true) {
     profile: false,
     calibration: false,
     global: false,
+    motion: false,
   };
 }
 
@@ -1135,9 +1214,15 @@ async function connectFlow() {
       const info = parseConfigInfo((await command(COMMAND.GET_CONFIG_INFO)).payload);
       const profile = await readProfile(selectedProfile.value);
       const calibration = await readCalibration();
+      const build = await readFirmwareBuildVersion();
+      const sensor = Number.isInteger(build) && build >= MOTION_MIN_BUILD
+        ? parseMotion((await command(MOTION_GET)).payload) : null;
       if (device !== retainedDevice || info.active_profile !== selectedProfile.value
           || JSON.stringify(profile) !== JSON.stringify(profileBackup.value)
           || JSON.stringify(calibration) !== JSON.stringify(calibrationBackup.value)
+          || build !== firmwareBuildVersion.value
+          || (!!motionBackup.value !== !!sensor)
+          || (sensor && motionChanged(sensor.config, motionBackup.value))
           || info.boot_profile !== configInfo.value.boot_profile
           || info.feature_flags !== configInfo.value.feature_flags) {
         connectionConflict.value = true;
@@ -1179,6 +1264,7 @@ async function reloadConnectedDevice() {
 }
 
 function stopSessionTimers() {
+  cancelMotionCalibration(connected.value ? null : 'Controller disconnected. Retry calibration.');
   if (livePollTimer) {
     window.clearInterval(livePollTimer);
     livePollTimer = null;
@@ -1236,6 +1322,12 @@ async function refreshAll() {
     configInfo.value = parseConfigInfo(infoPacket.payload);
     try { firmwareBuildVersion.value = await readFirmwareBuildVersion(); }
     catch (error) { firmwareBuildVersion.value = null; log(error.message); }
+    motionDraft.value = null; motionBackup.value = null; motionTelemetry.value = null;
+    if (motionSupported.value) {
+      const sensor = parseMotion((await command(MOTION_GET)).payload);
+      motionDraft.value = clone(sensor.config); motionBackup.value = clone(sensor.config);
+      motionTelemetry.value = sensor;
+    }
     const statusPacket = await command(COMMAND.GET_STATUS);
     lastStatus.value = parseStatus(statusPacket.payload);
     selectedProfile.value = configInfo.value.active_profile;
@@ -1306,6 +1398,16 @@ async function applyDraft() {
   if (!canApply.value) return false;
   return runBusyOperation(async () => {
     try {
+      if (motionDraftChanged.value) {
+        const submitted = clone(motionDraft.value);
+        const sensor = parseMotion((await command(MOTION_SET, encodeMotion(submitted))).payload);
+        if (String(encodeMotion(sensor.config)) !== String(encodeMotion(submitted))) throw new Error("Motion settings verification failed.");
+        if (!motionChanged(motionDraft.value, submitted)) motionDraft.value = clone(sensor.config);
+        motionBackup.value = clone(sensor.config);
+        motionTelemetry.value = sensor;
+        appliedChangeKinds.value = { ...appliedChangeKinds.value, motion: true };
+        configInfo.value = parseConfigInfo((await command(COMMAND.GET_CONFIG_INFO)).payload);
+      }
       if (globalChanged.value) {
         const packet = await command(
           COMMAND.SET_GLOBAL_CONFIG,
@@ -1398,6 +1500,7 @@ function setCalibrationMode(mode) {
 }
 
 function restoreLocalBaselines() {
+  motionDraft.value = motionBackup.value ? clone(motionBackup.value) : null;
   if (profileBackup.value) {
     profileDraft.value = clone(profileBackup.value);
   }
@@ -1425,6 +1528,11 @@ async function rollbackAppliedChanges() {
   }
 
   try {
+    if (appliedChangeKinds.value.motion && savedMotionBaseline.value) {
+      const sensor = parseMotion((await command(MOTION_SET, encodeMotion(savedMotionBaseline.value))).payload);
+      motionBackup.value = clone(sensor.config);
+      motionDraft.value = clone(sensor.config);
+    }
     if (appliedChangeKinds.value.global) {
       const packet = await command(
         COMMAND.SET_GLOBAL_CONFIG,
@@ -1980,6 +2088,7 @@ async function readAnalogSnapshot() {
 async function pollAnalogSnapshot(syncRaw = false) {
   if (
     !connected.value
+    || motionCalibrationActive.value
     || client.busy
     || centerCaptureActive.value
     || rangeCaptureActive.value
@@ -2005,6 +2114,7 @@ async function pollAnalogSnapshot(syncRaw = false) {
 async function pollLiveState() {
   if (
     !connected.value
+    || motionCalibrationActive.value
     || client.busy
     || centerCaptureActive.value
     || rangeCaptureActive.value

@@ -204,3 +204,15 @@ test("Profile import rejects an out-of-range button debounce window", () => {
   };
   assert.throws(() => importProfile(envelope, 0), /invalid button debounce/);
 });
+
+test("device backups round-trip optional motion settings and retain old backup compatibility", () => {
+  const config = {pollrate_hz:1000,boot_profile:0,feature_flags:0};
+  const profiles = Array.from({length:4},fixtureProfile);
+  const calibration = createDefaultAnalogCalibration();
+  const motion = {version:1,enabled:1,dlpf:3,gyro_cutoff_hz:80,accel_cutoff_hz:40,gyro_bias:[-14,7,0],raw:Array(16).fill(0)};
+  motion.raw[14] = 0xa5;
+  const restored = validateBackup(exportBackup(config,profiles,calibration,motion));
+  assert.equal(restored.motion.raw[14],0xa5);
+  assert.deepEqual(restored.motion.gyro_bias,[-14,7,0]);
+  assert.equal(validateBackup(exportBackup(config,profiles,calibration)).motion,null);
+});

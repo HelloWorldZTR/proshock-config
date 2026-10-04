@@ -1,3 +1,4 @@
+import { encodeMotion, parseMotion } from "../motion.js";
 import {
   ANALOG_CALIBRATION_SIZE,
   BUTTON_DEBOUNCE_MAX_SAMPLES,
@@ -83,10 +84,11 @@ export function exportProfile(profile) {
   });
 }
 
-export function exportBackup(configInfo, profiles, calibration) {
+export function exportBackup(configInfo, profiles, calibration, motion = null) {
   const calibrationBytes = new Uint8Array(calibration.raw);
   writeAnalogCalibrationToPayload(calibrationBytes, calibration);
   return serialize(BACKUP_FORMAT, {
+    ...(motion ? { motion_bytes: bytesToBase64(encodeMotion(motion)) } : {}),
     config: {
       pollrate_hz: configInfo.pollrate_hz,
       boot_profile: configInfo.boot_profile,
@@ -186,7 +188,15 @@ export function validateBackup(envelope) {
       || !validateCalibration(parsed).pass) {
     throw new Error("Backup calibration version, directions or endpoints are invalid.");
   }
+  let motion = null;
+  if (envelope.payload.motion_bytes != null) {
+    const bytes = base64ToBytes(envelope.payload.motion_bytes);
+    if (bytes.length !== 16) throw new Error("Unexpected motion config size.");
+    const packet = new Uint8Array(40); packet.set(bytes);
+    motion = parseMotion(packet).config;
+  }
   return {
+    motion,
     envelope,
     profiles: envelope.payload.profiles.map(importBackupProfile),
     calibration,

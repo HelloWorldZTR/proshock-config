@@ -35,9 +35,11 @@
               <p class="accessory-note">OLED and external ADC have no firmware driver yet.</p>
             </template>
             <template v-else-if="active === 'u18'">
-              <p>Bluetooth can be configured here when the module and firmware are ready.</p>
-              <label class="accessory-setting"><span>Module mode</span><select aria-label="U18 Bluetooth mode" value="none"><option value="none">None</option><option value="bluetooth" disabled>Bluetooth · coming later</option></select></label>
-              <p class="accessory-note">Bluetooth is unavailable in this firmware.</p>
+              <label class="accessory-setting"><span>Accessory</span><select aria-label="Onboard expansion accessory" :value="motion?.enabled ? 'motion' : 'none'" :disabled="!connected || disabled" @change="selectBoardExpansion($event.target.value)"><option value="none">None</option><option value="motion" :disabled="!motionSupported || !motion">Motion sensor</option><option value="adc" disabled>External ADC · coming later</option></select></label>
+              <MotionSettings v-if="motionSupported && motion?.enabled" :model-value="motion" :supported="motionSupported" :disabled="!connected || disabled" :telemetry="motionTelemetry" :calibration="motionCalibration" @update:model-value="$emit('motion', $event)" @refresh="$emit('motion-refresh')" @calibrate="$emit('motion-calibrate')" @cancel="$emit('motion-cancel')" />
+              <p v-else-if="!motionSupported" class="accessory-note">MPU-6050 requires firmware 0.5.3, build 2026100301 or newer.</p>
+              <p v-else class="accessory-note">No onboard accessory is enabled.</p>
+              <p class="accessory-note">Apply and Save below to store changes.</p>
             </template>
             <template v-else-if="active === 'daughter'">
               <p>FPC3 connects the expansion buttons. Configure their actions in Buttons.</p>
@@ -59,17 +61,18 @@
 <script setup>
 import { computed, ref } from "vue";
 import Board3DViewer from "../components/Board3DViewer.vue";
+import MotionSettings from "../components/MotionSettings.vue";
 import HelpTip from "../components/HelpTip.vue";
 
-const props = defineProps({ ribbonMode: Number, calibration: Object, configInfo: Object, connected: Boolean, disabled: Boolean });
-defineEmits(["ribbon-mode", "direction", "buttons"]);
+const props = defineProps({ ribbonMode: Number, calibration: Object, configInfo: Object, connected: Boolean, disabled: Boolean, motion: Object, motionSupported: Boolean, motionTelemetry: Object, motionCalibration: Object });
+const emit = defineEmits(["ribbon-mode", "direction", "buttons", "motion", "motion-refresh", "motion-calibrate", "motion-cancel"]);
 const active = ref(null);
 const stage = ref(null);
 const leader = ref(null);
 const interfaces = [
   { id: "six", number: "01", name: "6-pin expansion", detail: "FPC4", side: "right" },
   { id: "daughter", number: "02", name: "Expansion buttons", detail: "FPC3", side: "right" },
-  { id: "u18", number: "03", name: "Bluetooth module", detail: "U18", side: "right" },
+  { id: "u18", number: "03", name: "Onboard expansion", detail: "U18", side: "right" },
   { id: "wide", number: "04", name: "16-pin ribbon", detail: "FPC2", side: "right" },
   { id: "pads", number: "05", name: "Button pads", detail: "K1–K8", side: "left" },
 ];
@@ -83,6 +86,13 @@ const leaderPath = computed(() => {
 });
 const directionSupported = computed(() => props.calibration?.calibration_version === 2);
 const triggers = [{ channel: 4, label: "L2" }, { channel: 5, label: "R2" }];
+
+/** @brief Select the supported onboard module while retaining its filter draft. */
+function selectBoardExpansion(value) {
+  if (!props.connected || props.disabled || !props.motionSupported || !props.motion) return;
+  if (!["none", "motion"].includes(value)) return;
+  emit("motion", { ...props.motion, enabled: value === "motion" ? 1 : 0 });
+}
 
 /** @brief Open one callout and let the board yield space on that side. */
 function selectItem(id) {
@@ -133,7 +143,7 @@ function isInverted(channel) {
 .accessory-leader circle { fill: var(--accent); filter: drop-shadow(0 0 8px var(--accent)); }
 .accessory-idle-caption { position: absolute; left: 50%; bottom: 24px; z-index: 4; transform: translateX(-50%); color: var(--secondary); font: 10px var(--font-mono); letter-spacing: .14em; white-space: nowrap; pointer-events: none; }
 @keyframes accessory-line-draw { to { stroke-dashoffset: 0; } }
-.accessory-detail-content { width: 100%; }
+.accessory-detail-content { width: 100%; overflow-y: auto; min-height: 0; padding-right: 4px; }
 .accessory-detail-top { display: flex; justify-content: space-between; color: var(--accent); font: 10px var(--font-mono); letter-spacing: .08em; }
 .accessory-detail h2 { margin: 25px 0 10px; font-size: 24px; line-height: 1.16; letter-spacing: -.04em; }
 .accessory-detail p { margin-bottom: 22px; color: var(--secondary); font-size: 12px; line-height: 1.65; }

@@ -490,3 +490,142 @@ test('optional build query reads new firmware and tolerates the legacy BAD_COMMA
   }`);
   assert.equal(await run('readFirmwareBuildVersion()'), 2026093001);
 });
+
+test('motion Apply preserves later edits, verifies RAM and joins shared Save ownership', async () => {
+  const run = harness();
+  run(`connected.value = true; firmwareBuildVersion.value = MOTION_MIN_BUILD;
+    configInfo.value = {boot_profile:0, feature_flags:0};
+    motionDraft.value = {version:1,enabled:0,dlpf:3,gyro_cutoff_hz:80,accel_cutoff_hz:40,gyro_bias:[0,0,0],raw:Array(16).fill(0)};
+    motionBackup.value = clone(motionDraft.value); captureSavedBaselines();
+    setMotionDraft({...motionDraft.value,enabled:1});
+    let finishMotion; command = async (id,payload) => {
+      if (id === MOTION_SET) return new Promise(resolve => {finishMotion = () => {const data=new Uint8Array(40);data.set(payload);resolve({payload:data})}});
+      const data=new Uint8Array(56);data[5]=1;return {payload:data};
+    }; pollAnalogSnapshot = async () => {};`);
+  assert.equal(run('canApply.value'),true);
+  const applying=run('applyDraft()');
+  run('motionDraft.value.gyro_cutoff_hz = 25; finishMotion()');
+  assert.equal(await applying,true);
+  assert.equal(run('motionBackup.value.gyro_cutoff_hz'),80);
+  assert.equal(run('motionDraft.value.gyro_cutoff_hz'),25);
+  assert.equal(run('motionDraftChanged.value'),true);
+  assert.equal(run('appliedRollbackRequired.value'),true);
+  run('restoreLocalBaselines()');
+  assert.equal(run('motionDraftChanged.value'),false);
+});
+
+test('old firmware and invalid motion inputs cannot be applied', () => {
+  const run=harness();
+  run('connected.value=true; setMotionDraft({enabled:1})');
+  assert.equal(run('motionDraft.value'),null);
+  run(`firmwareBuildVersion.value=MOTION_MIN_BUILD;
+    motionDraft.value={version:1,enabled:1,dlpf:3,gyro_cutoff_hz:80,accel_cutoff_hz:40,gyro_bias:[0,0,0],raw:Array(16).fill(0)};
+    motionBackup.value=clone(motionDraft.value); motionDraft.value.dlpf=7;`);
+  assert.equal(run('hasDraft.value'),true);
+  assert.equal(run('canApply.value'),false);
+});
+
+test('motion Save snapshots acknowledged RAM while a concurrent newer edit remains a draft', async () => {
+  const run=harness();
+  run(`connected.value=true; firmwareBuildVersion.value=MOTION_MIN_BUILD;
+    configInfo.value={boot_profile:0,feature_flags:0,dirty:1};
+    motionDraft.value={version:1,enabled:1,dlpf:3,gyro_cutoff_hz:80,accel_cutoff_hz:40,gyro_bias:[0,0,0],raw:Array(16).fill(0)};
+    motionBackup.value=clone(motionDraft.value);
+    let finishSave; command=async id => {
+      if(id===COMMAND.SAVE_CONFIG) return new Promise(resolve=>{finishSave=()=>resolve({payload:new Uint8Array(16)})});
+      return {payload:new Uint8Array(56)};
+    };`);
+  assert.equal(run('canSave.value'),true);
+  const saving=run('saveConfig()');
+  run('motionDraft.value.accel_cutoff_hz=20; finishSave()');
+  assert.equal(await saving,true);
+  assert.equal(run('savedMotionBaseline.value.accel_cutoff_hz'),40);
+  assert.equal(run('motionDraft.value.accel_cutoff_hz'),20);
+  assert.equal(run('motionDraftChanged.value'),true);
+});
+
+test('motion discard restores the saved block before the shared flash save', async () => {
+  const run=harness();
+  run(`connected.value=true;firmwareBuildVersion.value=MOTION_MIN_BUILD;
+    configInfo.value={boot_profile:0,feature_flags:0,dirty:0};
+    motionDraft.value={version:1,enabled:0,dlpf:3,gyro_cutoff_hz:80,accel_cutoff_hz:40,gyro_bias:[0,0,0],raw:Array(16).fill(0)};
+    motionBackup.value=clone(motionDraft.value);captureSavedBaselines();
+    motionDraft.value.enabled=1;motionBackup.value=clone(motionDraft.value);
+    appliedChangeKinds.value.motion=true;
+    let commands=[];command=async (id,payload)=>{commands.push(id);
+      if(id===MOTION_SET) {const p=new Uint8Array(40);p.set(payload);return {payload:p}};
+      return {payload:new Uint8Array(id===COMMAND.SAVE_CONFIG?16:56)};
+    };`);
+  assert.equal(await run('rollbackAppliedChanges()'),true);
+  assert.equal(run('commands[0]'),0x16);
+  assert.equal(run('motionDraft.value.enabled'),0);
+  assert.equal(run('appliedRollbackRequired.value'),false);
+});
+
+/** @brief Start from an enabled sensor with a filter edit still in the local draft. */
+function motionCalibrationHarness() {
+  const run = harness();
+  run(`connected.value=true; firmwareBuildVersion.value=MOTION_MIN_BUILD; page.value='accessories';
+    configInfo.value={boot_profile:0,feature_flags:0,dirty:0};
+    motionBackup.value={version:1,enabled:1,dlpf:3,gyro_cutoff_hz:80,accel_cutoff_hz:40,gyro_bias:[12,23,34],raw:Array(16).fill(0)};
+    motionDraft.value={...clone(motionBackup.value),gyro_cutoff_hz:25};
+    let commands=[];
+    command=async id=>{commands.push(id); const payload=new Uint8Array(40);payload.set(encodeMotion(motionBackup.value));payload[16]=2;return {payload}};`);
+  return run;
+}
+
+test('gyro calibration stages offsets, keeps filter edits, and does not apply or save automatically', async () => {
+  const run = motionCalibrationHarness();
+  run(`captureGyroBias=async options=>{
+    options.onProgress({phase:'sampling',progress:50});
+    if (!busy.value || canApply.value || canSave.value) throw new Error('Calibration must own Apply/Save');
+    await options.readSample();
+    return [45,-67,89];
+  };`);
+  await run('startMotionCalibration()');
+  assert.equal(run('motionCalibration.value.phase'), 'success');
+  assert.deepEqual(Array.from(run('motionDraft.value.gyro_bias')), [45,-67,89]);
+  assert.deepEqual(Array.from(run('motionBackup.value.gyro_bias')), [12,23,34]);
+  assert.equal(run('motionDraft.value.gyro_cutoff_hz'), 25);
+  assert.deepEqual(Array.from(run('commands')), [0x15]);
+  assert.equal(run('canApply.value'), true);
+  assert.equal(run('canSave.value'), false);
+  assert.equal(run('busy.value'), false);
+});
+
+test('gyro calibration failure keeps the complete draft and allows retry', async () => {
+  const run = motionCalibrationHarness();
+  run(`const before=JSON.stringify(motionDraft.value);
+    captureGyroBias=async options=>{options.onProgress({phase:'sampling'});throw new Error('Movement detected')};`);
+  await run('startMotionCalibration()');
+  assert.equal(run('motionCalibration.value.phase'), 'error');
+  assert.equal(run('JSON.stringify(motionDraft.value)===before'), true);
+  assert.equal(run('busy.value'), false);
+});
+
+test('cancellation, navigation, disconnect and late edits prevent stale gyro results', async () => {
+  for (const interrupt of [
+    'cancelMotionCalibration()', 'performGo("home")', 'connected.value=false; stopSessionTimers()',
+    'connected.value=false', 'motionDraft.value.gyro_cutoff_hz=30',
+  ]) {
+    const run = motionCalibrationHarness();
+    run(`let finish; captureGyroBias=options=>{options.onProgress({phase:'sampling'});return new Promise(resolve=>{finish=resolve})};`);
+    const calibrating = run('startMotionCalibration()');
+    run(interrupt);
+    run('finish([100,200,300])');
+    await calibrating;
+    assert.deepEqual(Array.from(run('motionDraft.value.gyro_bias')), [12,23,34]);
+    assert.notEqual(run('motionCalibration.value.phase'), 'success');
+    assert.equal(run('busy.value'), false);
+  }
+});
+
+test('gyro calibration rejects unsupported firmware, busy sessions and unapplied sensor enablement', async () => {
+  for (const setup of ['firmwareBuildVersion.value=null', 'busy.value=true', 'connected.value=false', 'motionDraft.value.enabled=0', 'motionBackup.value.enabled=0']) {
+    const run = motionCalibrationHarness();
+    run(`let captures=0; captureGyroBias=async()=>{captures++;return [0,0,0]}; ${setup}`);
+    await run('startMotionCalibration()');
+    assert.equal(run('captures'), 0);
+    assert.equal(run('commands.length'), 0);
+  }
+});
