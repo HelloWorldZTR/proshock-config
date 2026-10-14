@@ -1,5 +1,6 @@
 /* Scoped first-batch layout. Existing mapping, curve and RC styling stays intact. */
 .connection-covered { pointer-events: none; user-select: none; visibility: hidden; }
+.connection-covered *, .connection-covered *::before, .connection-covered *::after { visibility: hidden !important; }
 .connection-gate { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: radial-gradient(ellipse at 50% 30%, var(--page-glow, #142331), var(--inset-background, #0a0f16) 65%); overflow-y: auto; }
 .connection-gate-panel { width: min(520px, 100%); padding: 36px; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--panel-background, #101820); text-align: center; box-shadow: 0 24px 90px #0006; outline: none; }
 .connection-gate-panel h1 { margin: 18px 0 12px; }

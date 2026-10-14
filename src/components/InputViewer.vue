@@ -20,6 +20,7 @@
       :dpad-hat="raw?.dpad_hat ?? 8"
       :show-stick-readouts="!detailKind"
     />
+    <ExtraButtonStrip v-if="!detailsOnly" :pressed-sources="physicalPressedSources(raw)" />
     <div v-if="!detailsOnly" class="activity-strip" aria-label="Button activity">
       <span
         v-for="button in buttons"
@@ -41,6 +42,8 @@
 
 <script setup>
 import { computed, onUnmounted, ref, watch } from "vue";
+import ExtraButtonStrip from "./ExtraButtonStrip.vue";
+import { physicalPressedSources } from "../physical-input.js";
 import ControllerVisual from "../ControllerVisual.vue";
 import { normalizeAxis, normalizedTrigger } from "../calibration.js";
 import { analogAxisInvert } from "../analog-direction.js";

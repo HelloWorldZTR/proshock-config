@@ -44,15 +44,13 @@
             <div class="layer-switcher" aria-label="Mapping layer">
               <button v-for="item in layerChoices" :key="item.id" type="button" :class="{ active: editingLayer === item.id }" @click="editingLayer = item.id">{{ item.label }}</button>
             </div>
-            <div class="view-switcher" aria-label="Controller view">
-              <button type="button" :class="{ active: view === 'front' }" @click="setView('front')">Front</button>
-              <button type="button" :class="{ active: view === 'back' }" @click="setView('back')">K1–K8</button>
-            </div>
+
           </div>
         </header>
+        <div class="mapping-preview">
         <div
           class="controller-map"
-          :class="[`controller-map--${view}`, { 'hotspot-debug-active': hotspotDebugEnabled }]"
+          :class="{ 'hotspot-debug-active': hotspotDebugEnabled }"
           @click="captureHotspotPoint"
         >
           <MappingControllerArtwork
@@ -62,7 +60,7 @@
             v-for="hotspot in visibleHotspots"
             :key="hotspot.source"
             type="button"
-            class="controller-hotspot"
+            class="controller-hotspot mapping-key-hint"
             :class="{
               active: selectedComboIndex === null && selectedSource === hotspot.source,
               pressed: pressedSources.has(hotspot.source),
@@ -70,12 +68,16 @@
               'debug-marked': hotspotDebugEnabled && debugMarkedSources.has(hotspot.source),
             }"
             :style="{ left: `${hotspot.x}%`, top: `${hotspot.y}%` }"
-            :aria-label="`Select ${SOURCE_NAMES[hotspot.source]}`"
+            :aria-label="mappingHint(hotspot.source)"
+            :data-key-hint="mappingHint(hotspot.source)"
             data-i18n-ignore
             @click="selectSource(hotspot.source)"
           >
             <span>{{ hotspot.short }}</span>
           </button>
+        </div>
+        <ExtraButtonStrip interactive :pressed-sources="pressedSources" :hints="extraButtonHints"
+          :selected="selectedComboIndex === null ? selectedSource : null" @select="selectSource" />
         </div>
         <div class="selection-dock">
           <span>
@@ -506,6 +508,9 @@ import { advanceMacroCapture, createMacroCapture } from "../macro-capture.js";
 import { cloneMacroDraft, insertMacroStep, moveMacroStep, parseStepDuration, removeMacroSlot, resolveMacroSteps } from "../macro-editor.js";
 import CompetitiveRiskWarning from "./CompetitiveRiskWarning.vue";
 import MacroOutputIcons from "./MacroOutputIcons.vue";
+import { translate } from "../i18n.js";
+import ExtraButtonStrip from "./ExtraButtonStrip.vue";
+import { physicalPressedSources } from "../physical-input.js";
 import MappingControllerArtwork from "./MappingControllerArtwork.vue";
 import {
   COMBO_CAPTURE_POLL_MS,
@@ -539,7 +544,6 @@ const emit = defineEmits(["update"]);
 const openManager = ref(null);
 const selectedSource = ref(0);
 const editingLayer = ref(0);
-const view = ref("front");
 const sourceQuery = ref("");
 const inputDrawerOpen = ref(false);
 const comboDrawerOpen = ref(false);
@@ -608,15 +612,7 @@ const frontHotspots = [
   [16, "↓", 21.43, 38.11], [17, "←", 16.14, 30.61],
 ].map(([source, short, x, y]) => ({ source, short, x, y }));
 const frontHotspotDraft = ref(frontHotspots.map((hotspot) => ({ ...hotspot })));
-const backHotspots = [
-  [18, "K1", 27, 36], [19, "K2", 35, 45], [20, "K3", 37, 57], [21, "K4", 30, 68],
-  [22, "K5", 73, 36], [23, "K6", 65, 45], [24, "K7", 63, 57], [25, "K8", 70, 68],
-].map(([source, short, x, y]) => ({ source, short, x, y }));
-const visibleHotspots = computed(() => (
-  view.value === "front"
-    ? (hotspotDebugEnabled.value ? frontHotspotDraft.value : frontHotspots)
-    : backHotspots
-));
+const visibleHotspots = computed(() => hotspotDebugEnabled.value ? frontHotspotDraft.value : frontHotspots);
 const debugHotspotCode = computed(() => {
   const entries = frontHotspotDraft.value.map((hotspot) => (
     `  [${hotspot.source}, ${JSON.stringify(hotspot.short)}, ${hotspot.x}, ${hotspot.y}],`
@@ -675,19 +671,7 @@ const recorderStatusLabel = computed(() => {
   if (isRecording.value) return "Recording controller input";
   return recordedSteps.value.length ? "Editing macro steps" : "Ready to build or record";
 });
-const pressedSources = computed(() => {
-  const pressed = new Set();
-  const buttonMask = props.raw?.buttons || 0;
-  for (let source = 0; source < 14; source += 1) {
-    if (buttonMask & (1 << source)) pressed.add(source);
-  }
-  const hat = props.raw?.dpad_hat ?? 8;
-  if ([0, 1, 7].includes(hat)) pressed.add(14);
-  if ([1, 2, 3].includes(hat)) pressed.add(15);
-  if ([3, 4, 5].includes(hat)) pressed.add(16);
-  if ([5, 6, 7].includes(hat)) pressed.add(17);
-  return pressed;
-});
+const pressedSources = computed(() => physicalPressedSources(props.raw));
 const filteredGroups = computed(() => {
   const query = sourceQuery.value.trim().toLowerCase();
   return SOURCE_GROUPS.map((group) => ({
@@ -798,7 +782,6 @@ function toggleComboDrawer() {
 function toggleHotspotDebug() {
   hotspotDebugEnabled.value = !hotspotDebugEnabled.value;
   if (!hotspotDebugEnabled.value) return;
-  view.value = "front";
   inputDrawerOpen.value = false;
   comboDrawerOpen.value = false;
   selectedComboIndex.value = null;
@@ -890,10 +873,16 @@ async function copyDebugHotspots() {
 function sourceMeta(sourceId) { return GPIO_NAMES[sourceId] || (sourceId >= 26 ? "GPIO unassigned" : `Source ${sourceId}`); }
 function layerOverride(sourceId) { return editingLayer.value ? resolver.value.layers[editingLayer.value - 1].overrides.find((entry) => entry.source_id === sourceId) : null; }
 function effectiveAction(sourceId) { return layerOverride(sourceId)?.action_id ?? resolver.value.base_mapping[sourceId]; }
-function setView(nextView) {
-  view.value = nextView;
-  selectSource(nextView === "front" ? 0 : 18);
+/** @brief Describe the selected layer's effective mapping on hover or keyboard focus. */
+function mappingHint(sourceId) {
+  const action = effectiveAction(sourceId);
+  const label = actionLabel(action);
+  return `${SOURCE_NAMES[sourceId]} → ${isGamepadAction(action) || isKeyboardAction(action) ? label : translate(label)}`;
 }
+const extraButtonHints = computed(() => Object.fromEntries(
+  Array.from({ length: 8 }, (_, index) => [index + 18, mappingHint(index + 18)]),
+));
+
 function selectSource(sourceId) {
   selectedComboIndex.value = null;
   selectedSource.value = sourceId;

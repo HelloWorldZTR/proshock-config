@@ -811,6 +811,7 @@ registerLocale("zh-CN", "中文", {
   "Base": "基础层",
   "Layer 1": "层 1",
   "Layer 2": "层 2",
+  "Pressed": "按下",
   "No buttons pressed": "没有按键按下",
   "Armed — waiting for first controller input": "已就绪——等待首次手柄输入",
   "Recording controller input": "正在录制手柄输入",

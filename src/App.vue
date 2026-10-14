@@ -1678,11 +1678,11 @@ function profileResponseSignature(profiles) {
 
 async function getRaw() {
   const packet = await command(COMMAND.GET_RAW_INPUT, new Uint8Array(), false);
-  latestRaw.value = parseRawInput(packet.payload);
+  latestRaw.value = { ...parseRawInput(packet.payload), digital_mask: latestRaw.value?.digital_mask };
   return latestRaw.value;
 }
 
-async function getDigitalInput() {
+async function getDigitalInput(fallbackRaw = null) {
   if (digitalInputCommandSupported !== false) {
     const packet = await scheduler.enqueue(
       () => client.sendCommand(COMMAND.GET_DIGITAL_INPUT, new Uint8Array()),
@@ -1698,7 +1698,7 @@ async function getDigitalInput() {
     digitalInputCommandSupported = false;
   }
 
-  const raw = await getRaw();
+  const raw = fallbackRaw || await getRaw();
   return {
     sequence: raw.sequence,
     digital_mask: digitalMaskFromRawInput(raw),
@@ -2132,6 +2132,16 @@ async function pollLiveState() {
   try {
     const raw = await getRaw();
     if (!await handleCalibrationStageConfirm(raw)) {
+      // K1–K8 are physical sources, absent from the standard gamepad report.
+      if (page.value === "home" || (page.value === "configurator" && configuratorSection.value === "buttons")) {
+        try {
+          const digital = await getDigitalInput(raw);
+          if (connected.value) latestRaw.value = { ...raw, digital_mask: digital.digital_mask };
+        } catch (error) {
+          if (connected.value) latestRaw.value = { ...raw, digital_mask: undefined };
+          log(error.message);
+        }
+      }
       await pollAnalogSnapshot();
     }
   } catch (error) {
