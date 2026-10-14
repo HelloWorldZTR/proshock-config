@@ -629,3 +629,53 @@ test('gyro calibration rejects unsupported firmware, busy sessions and unapplied
     assert.equal(run('commands.length'), 0);
   }
 });
+
+
+test('independent calibration routes start at the right stage and guard changes mid-capture', async () => {
+  const run = harness();
+  run('performGo("calibration", "triggers")');
+  assert.equal(run('wizardStep.value'), 'trigger-start');
+  assert.equal(run('calibrationOwnsHeaderActions.value'), false);
+  assert.equal(run('parseRouteHash("#/calibration/sticks").section'), 'sticks');
+  run('connected.value = true; loadAllProfiles = async () => []; collectUnique = async () => [{sequence:1,adc:[2048,2048,2048,2048,0,0]}]; startTriggerCycleCapture = () => {triggerCaptureActive.value = true};');
+  await run('wizardPrimary()');
+  assert.equal(run('wizardStep.value'), 'triggers-pressed');
+  assert.equal(run('calibrationOwnsHeaderActions.value'), true);
+  assert.equal(await run('performParsedRoute({page:"calibration",section:"sticks",profileIndex:0})'), false);
+  run('resetCalibrationProgress()');
+  assert.equal(run('wizardStep.value'), 'trigger-start');
+  assert.equal(run('triggerCaptureActive.value'), false);
+});
+
+test('stick-only completion skips triggers and preserves their full calibration', async () => {
+  const run = harness();
+  run('performGo("calibration", "sticks"); const oldTriggers = JSON.stringify(calibrationDraft.value.trigger); neutralResult.value = {axes:calibrationDraft.value.axis.map(a => ({center:a.raw_center}))}; analyzeStickRange = (samples, index) => ({axis:calibrationDraft.value.axis.slice(index*2,index*2+2).map(a => ({...a,raw_min:100})),radius_q15:[...calibrationDraft.value.stick[index].radius_q15]}); wizardStep.value = "sticks-range";');
+  await run('finishRangeCapture()');
+  assert.equal(run('wizardStep.value'), 'validate-calibration');
+  assert.equal(run('JSON.stringify(calibrationDraft.value.trigger)'), run('oldTriggers'));
+  assert.equal(run('calibrationDraft.value.axis[0].raw_min'), 100);
+  run('wizardBack()');
+  assert.equal(run('wizardStep.value'), 'sticks-range');
+});
+
+test('trigger-only completion leaves all stick calibration and directions unchanged', async () => {
+  const run = harness();
+  run('performGo("calibration", "triggers"); const previous = JSON.stringify(calibrationDraft.value); analyzeTriggers = () => calibrationDraft.value.trigger.map(t => ({...t,raw_released:100,raw_pressed:3900}));');
+  await run('completeTriggerCycleCapture()');
+  assert.equal(run('wizardStep.value'), 'validate-calibration');
+  assert.equal(run('JSON.stringify(calibrationDraft.value.axis)'), run('JSON.stringify(JSON.parse(previous).axis)'));
+  assert.equal(run('JSON.stringify(calibrationDraft.value.stick)'), run('JSON.stringify(JSON.parse(previous).stick)'));
+  assert.equal(run('calibrationDraft.value.direction_mask'), run('JSON.parse(previous).direction_mask'));
+  assert.equal(run('calibrationDraft.value.trigger[0].raw_pressed'), 3900);
+});
+
+
+test('back to a partial calibration start clears its draft so capture can be restarted', () => {
+  const run = harness();
+  run('performGo("calibration", "triggers"); calibrationDraft.value.trigger[0].raw_pressed = 3900; wizardStep.value = "triggers-pressed"; wizardBack()');
+  assert.equal(run('wizardStep.value'), 'trigger-start');
+  assert.equal(run('calibrationChanged.value'), false);
+  run('performGo("calibration", "sticks"); calibrationDraft.value.axis[0].raw_min = 100; wizardStep.value = "sticks-range"; wizardBack()');
+  assert.equal(run('wizardStep.value'), 'neutral');
+  assert.equal(run('calibrationChanged.value'), false);
+});

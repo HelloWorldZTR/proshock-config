@@ -58,6 +58,8 @@
     <div v-else-if="page === 'calibration' && !iapMode" class="page calibration-workspace">
       <nav class="subtabs" aria-label="Calibration sections">
         <button type="button" :class="{ active: calibrationSection === 'automatic' }" :disabled="calibrationOwnsHeaderActions" @click="requestGo('calibration', 'automatic')">Automatic calibration</button>
+        <button type="button" :class="{ active: calibrationSection === 'sticks' }" :disabled="calibrationOwnsHeaderActions" @click="requestGo('calibration', 'sticks')">Stick calibration</button>
+        <button type="button" :class="{ active: calibrationSection === 'triggers' }" :disabled="calibrationOwnsHeaderActions" @click="requestGo('calibration', 'triggers')">Trigger calibration</button>
         <button type="button" :class="{ active: calibrationSection === 'manual' }" :disabled="calibrationOwnsHeaderActions" @click="requestGo('calibration', 'manual')">Manual settings</button>
       </nav>
       <div v-if="calibrationSection === 'manual'" class="page manual-bounds-page">
@@ -69,6 +71,7 @@
       </div>
     <QuickCalibrationPage
       v-else
+      :key="calibrationSection" :scope="calibrationSection"
       :step="wizardStep" :development-preview="developmentPreview" :busy="busy || saveInProgress || wizardActionInProgress" :offline="!connected" :error="wizardError" :neutral-result="neutralResult"
       :calibration-mode="calibrationMode"
       :center-capture-active="centerCaptureActive" :center-capture-status="centerCaptureStatus"
@@ -226,7 +229,7 @@ import {
   analyzeQuickCenter,
   analyzeStickRange,
   analyzeTriggers,
-  buildCalibrationDraft,
+  buildScopedCalibrationDraft,
   createCenterReturnCapture,
   createQuickCenterCapture,
   createTriggerCycleCapture,
@@ -442,7 +445,7 @@ const canApply = computed(() => (
 ));
 const canSave = computed(() => connected.value && !busy.value && !saveInProgress.value && !!configInfo.value?.dirty && !hasDraft.value);
 const calibrationWorkflowPending = computed(() => (
-  page.value === "calibration" && calibrationSection.value === "automatic"
+  page.value === "calibration" && calibrationSection.value !== "manual"
   && [
     "sticks-range",
     "triggers-released",
@@ -451,11 +454,11 @@ const calibrationWorkflowPending = computed(() => (
   ].includes(wizardStep.value)
 ));
 const calibrationOwnsHeaderActions = computed(() => (
-  calibrationSection.value === "automatic"
+  calibrationSection.value !== "manual"
   && (
     wizardActionInProgress.value
     || centerCaptureActive.value
-    || !["neutral", "complete"].includes(wizardStep.value)
+    || !["neutral", "trigger-start", "complete"].includes(wizardStep.value)
   )
 ));
 const calibrationPendingForGuard = computed(() => deriveCalibrationGuardPending({
@@ -482,7 +485,7 @@ const headerState = computed(() => deriveHeaderState({
     || (calibrationChanged.value && !calibrationDraftCanApply.value),
   hasUnsaved: hasUnsaved.value,
 }));
-const automaticCalibrationPage = computed(() => !iapMode.value && page.value === "calibration" && calibrationSection.value === "automatic");
+const automaticCalibrationPage = computed(() => !iapMode.value && page.value === "calibration" && calibrationSection.value !== "manual");
 // Every connected configuration page shares one persistent action bar.
 const settingsFooterVisible = computed(() => page.value !== "about" && !iapMode.value && !automaticCalibrationPage.value
   && (connected.value || page.value === "configurator" || page.value === "calibration"));
@@ -678,7 +681,13 @@ function performGo(nextPage, section = null) {
   }
   page.value = nextPage;
   if (nextPage === "configurator" && section) configuratorSection.value = section === "general" ? "system" : section;
-  if (nextPage === "calibration" && section) calibrationSection.value = section === "manual" ? "manual" : "automatic";
+  if (nextPage === "calibration" && section) {
+    const nextSection = ["manual", "sticks", "triggers"].includes(section) ? section : "automatic";
+    if (calibrationSection.value !== nextSection) {
+      calibrationSection.value = nextSection;
+      resetCalibrationProgress();
+    }
+  }
   if (nextPage === "diagnostics" && section) diagnosticsSection.value = section;
   currentRouteHash = routeHash(nextPage, section);
   history.replaceState(null, "", currentRouteHash);
@@ -704,7 +713,7 @@ function parseRouteHash(hash) {
     }
     route.section = parts.at(-1) === "general" ? "system" : parts.at(-1) || "system";
   }
-  if (nextPage === "calibration") route.section = parts[1] === "manual" ? "manual" : "automatic";
+  if (nextPage === "calibration") route.section = ["manual", "sticks", "triggers"].includes(parts[1]) ? parts[1] : "automatic";
   if (nextPage === "diagnostics") {
     route.section = parts[1] || "device";
   }
@@ -713,7 +722,7 @@ function parseRouteHash(hash) {
 
 async function performParsedRoute(route) {
   if (iapMode.value && route.page !== "firmware") return false;
-  if (route.page === "calibration" && route.section === "manual" && calibrationOwnsHeaderActions.value) {
+  if (route.page === "calibration" && route.section !== calibrationSection.value && calibrationOwnsHeaderActions.value) {
     notify("Finish or cancel automatic calibration first."); return false;
   }
   if (route.profileIndex !== selectedProfile.value) {
@@ -1487,7 +1496,7 @@ function resetCalibrationProgress() {
   rightRange.value = null;
   releasedSamples.value = [];
   triggerPressWindows.value = [];
-  wizardStep.value = "neutral";
+  wizardStep.value = calibrationSection.value === "triggers" ? "trigger-start" : "neutral";
   wizardError.value = "";
 }
 
@@ -1762,6 +1771,7 @@ async function handleCalibrationStageConfirm(raw) {
   if (
     !confirmed
     || page.value !== "calibration"
+    || calibrationSection.value === "manual"
     || centerCaptureActive.value
     || triggerCaptureActive.value
     || busy.value
@@ -1912,8 +1922,9 @@ function stopTriggerTimer() {
 async function completeTriggerCycleCapture() {
   stopTriggerTimer();
   const triggers = analyzeTriggers(releasedSamples.value, triggerPressWindows.value, calibrationDraft.value.direction_mask);
-  calibrationDraft.value = buildCalibrationDraft(
+  calibrationDraft.value = buildScopedCalibrationDraft(
     calibrationDraft.value,
+    calibrationSection.value,
     neutralResult.value,
     leftRange.value,
     rightRange.value,
@@ -1974,7 +1985,10 @@ async function finishRangeCapture() {
     leftRange.value = nextLeftRange;
     rightRange.value = nextRightRange;
     stopRangeTimer();
-    wizardStep.value = nextWizardStep(wizardStep.value);
+    if (calibrationSection.value === "sticks") {
+      calibrationDraft.value = buildScopedCalibrationDraft(calibrationDraft.value, "sticks", neutralResult.value, nextLeftRange, nextRightRange);
+    }
+    wizardStep.value = nextWizardStep(wizardStep.value, 1, calibrationSection.value);
     wizardError.value = "";
   } catch (error) {
     wizardError.value = error.message;
@@ -2010,7 +2024,7 @@ function confirmCalibrationSafety(dontShowAgain) {
 /** @brief Advance calibration once, retaining firmware verification before Save. */
 async function wizardPrimary() {
   if (!connected.value || busy.value || saveInProgress.value || wizardActionInProgress.value || wizardStep.value === "complete" || calibrationSafetyOpen.value) return;
-  if (wizardStep.value === "neutral" && !calibrationSafetyAcknowledged.value && !calibrationSafetyDismissed()) {
+  if (["neutral", "trigger-start"].includes(wizardStep.value) && !calibrationSafetyAcknowledged.value && !calibrationSafetyDismissed()) {
     calibrationSafetyReturnFocus = document.activeElement;
     calibrationSafetyOpen.value = true;
     return;
@@ -2023,6 +2037,13 @@ async function wizardPrimary() {
       const profiles = await loadAllProfiles();
       calibrationProfileGuard.value = profileResponseSignature(profiles);
       await startCenterCapture();
+    } else if (wizardStep.value === "trigger-start") {
+      if (calibrationChanged.value) throw new Error("Apply hardware directions and calibration bounds before starting automatic calibration.");
+      const profiles = await loadAllProfiles();
+      calibrationProfileGuard.value = profileResponseSignature(profiles);
+      releasedSamples.value = await collectUnique(64);
+      wizardStep.value = "triggers-pressed";
+      startTriggerCycleCapture();
     } else if (wizardStep.value === "sticks-range") {
       await finishRangeCapture();
     } else if (wizardStep.value === "triggers-released") {
@@ -2066,7 +2087,11 @@ function wizardBack() {
   stopCenterTimer();
   stopTriggerTimer();
   wizardError.value = "";
-  wizardStep.value = nextWizardStep(wizardStep.value, -1);
+  wizardStep.value = nextWizardStep(wizardStep.value, -1, calibrationSection.value);
+  // Returning to the start discards only this un-applied capture result.
+  if (["neutral", "trigger-start"].includes(wizardStep.value)) {
+    calibrationDraft.value = clone(calibrationBackup.value);
+  }
   if (wizardStep.value === "sticks-range") {
     startRangeCapture();
   } else if (wizardStep.value === "neutral") {

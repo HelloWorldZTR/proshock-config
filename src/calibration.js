@@ -915,10 +915,30 @@ export function validateResponse(response) {
     && response.inner_deadzone_q15 + response.outer_deadzone_q15 < Q15_ONE;
 }
 
-export function nextWizardStep(current, direction = 1) {
-  const index = WIZARD_STEPS.indexOf(current);
+/** @brief Return only the capture stages needed by the selected calibration scope. */
+export function calibrationSteps(scope = "automatic") {
+  if (scope === "sticks") return ["neutral", "sticks-range", "validate-calibration", "save", "complete"];
+  if (scope === "triggers") return ["trigger-start", "triggers-pressed", "validate-calibration", "save", "complete"];
+  return WIZARD_STEPS;
+}
+
+/** @brief Merge a partial calibration without changing the other physical controls. */
+export function buildScopedCalibrationDraft(base, scope, neutral, left, right, triggers) {
+  if (scope === "triggers") {
+    const draft = cloneConfigData(base);
+    draft.trigger = triggers.map(({ name, raw_released, raw_pressed }) => ({ name, raw_released, raw_pressed }));
+    return draft;
+  }
+  const draft = buildCalibrationDraft(base, neutral, left, right, scope === "sticks" ? base.trigger : triggers);
+  if (scope === "sticks") draft.trigger = cloneConfigData(base.trigger);
+  return draft;
+}
+
+export function nextWizardStep(current, direction = 1, scope = "automatic") {
+  const steps = calibrationSteps(scope);
+  const index = steps.indexOf(current);
   if (index < 0) {
     throw new Error(`Unknown wizard step: ${current}`);
   }
-  return WIZARD_STEPS[Math.max(0, Math.min(WIZARD_STEPS.length - 1, index + direction))];
+  return steps[Math.max(0, Math.min(steps.length - 1, index + direction))];
 }

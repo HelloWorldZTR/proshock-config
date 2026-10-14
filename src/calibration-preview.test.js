@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { parse } from '@vue/compiler-sfc';
 import { computed, reactive, ref } from 'vue';
-import { CENTER_RETURN_DIRECTIONS, WIZARD_STEPS } from './calibration.js';
+import { CENTER_RETURN_DIRECTIONS, WIZARD_STEPS, calibrationSteps } from './calibration.js';
 
 /** @brief Exercise the actual preview handlers without a controller or DOM. */
 function componentState(file, input) {
@@ -12,7 +12,7 @@ function componentState(file, input) {
   const source = descriptor.scriptSetup.content.replace(/import\s+[\s\S]*?\s+from\s+"[^"]+";/g, '');
   const props = reactive(input);
   const events = [];
-  const context = vm.createContext({ computed, reactive, ref, CENTER_RETURN_DIRECTIONS, WIZARD_STEPS,
+  const context = vm.createContext({ computed, reactive, ref, CENTER_RETURN_DIRECTIONS, WIZARD_STEPS, calibrationSteps,
     defineProps: () => props, defineEmits: () => (...args) => events.push(args) });
   vm.runInContext(source, context);
   return { props, events, run: code => vm.runInContext(code, context) };

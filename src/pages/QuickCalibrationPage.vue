@@ -8,8 +8,10 @@
       </select>
       <small>Debug build · Switch views for screenshots.</small>
     </label>
+    <p v-if="scope === 'sticks'" class="calibration-scope-note">Only stick calibration will change; trigger calibration is preserved.</p>
     <CalibrationWizard
       :step="displayedStep"
+      :scope="scope"
       :preview="previewActive"
       :busy="busy"
       :offline="offline"
@@ -43,6 +45,7 @@
 
 <script setup>
 import { computed, ref } from "vue";
+import { calibrationSteps } from "../calibration.js";
 import CalibrationWizard from "../CalibrationWizard.vue";
 
 function checkStatus(check) {
@@ -50,6 +53,7 @@ function checkStatus(check) {
 }
 
 const props = defineProps({
+  scope: { type: String, default: "automatic" },
   step: String, busy: Boolean, offline: Boolean, error: String, neutralResult: Object, leftRange: Object,
   calibrationMode: String, developmentPreview: Boolean,
   centerCaptureActive: Boolean, centerCaptureStatus: Object,
@@ -59,7 +63,8 @@ const props = defineProps({
 const emit = defineEmits(["primary", "back", "cancel", "mode"]);
 const previewStep = ref("");
 const previewCalibrationMode = ref("quick");
-const previewSteps = [
+const previewSteps = computed(() => [
+  { id: "trigger-start", label: "Trigger calibration" },
   { id: "neutral", label: "Stick center calibration" },
   { id: "sticks-range", label: "Both stick ranges and roundness" },
   { id: "triggers-released", label: "Trigger released points" },
@@ -67,12 +72,12 @@ const previewSteps = [
   { id: "validate-calibration", label: "Review and apply calibration" },
   { id: "save", label: "Save calibration" },
   { id: "complete", label: "Calibration complete" },
-];
+].filter(item => calibrationSteps(props.scope).includes(item.id)));
 const previewActive = computed(() => props.developmentPreview && previewStep.value !== "");
 const displayedStep = computed(() => previewActive.value ? previewStep.value : props.step);
 /** @brief Select a debug-only view without changing the live calibration transaction. */
 function choosePreviewStep(value) {
-  if (!props.developmentPreview || (value !== "" && !previewSteps.some(item => item.id === value))) return;
+  if (!props.developmentPreview || (value !== "" && !previewSteps.value.some(item => item.id === value))) return;
   previewStep.value = value;
 }
 /** @brief Keep mode changes local while previewing a calibration stage. */
@@ -87,8 +92,8 @@ function handlePrimary() {
 /** @brief Navigate the debug view or forward the real Back action. */
 function handleBack() {
   if (!previewActive.value) { emit("back"); return; }
-  const index = previewSteps.findIndex(item => item.id === previewStep.value);
-  if (index > 0) previewStep.value = previewSteps[index - 1].id;
+  const index = previewSteps.value.findIndex(item => item.id === previewStep.value);
+  if (index > 0) previewStep.value = previewSteps.value[index - 1].id;
 }
 /** @brief Exit the debug view while retaining the live calibration state. */
 function handleCancel() {

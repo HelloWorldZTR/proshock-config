@@ -104,12 +104,13 @@
 <script setup>
 import { computed } from "vue";
 import SettingsApplyFooter from "./components/SettingsApplyFooter.vue";
-import { CENTER_RETURN_DIRECTIONS, WIZARD_STEPS } from "./calibration.js";
+import { CENTER_RETURN_DIRECTIONS, calibrationSteps } from "./calibration.js";
 import crossIcon from "./assets/PlayStation_button_X.svg";
 import circleIcon from "./assets/PlayStation_button_C.svg";
 
 const props = defineProps({
   step: { type: String, required: true },
+  scope: { type: String, default: "automatic" },
   busy: { type: Boolean, default: false },
   offline: { type: Boolean, default: false },
   preview: { type: Boolean, default: false },
@@ -127,10 +128,10 @@ const props = defineProps({
 
 defineEmits(["back", "cancel", "mode", "primary"]);
 
-const visibleSteps = WIZARD_STEPS.filter((step) => step !== "backup" && step !== "complete");
-const visibleStepCount = visibleSteps.length;
-const stepNumber = computed(() => props.step === "complete" ? visibleStepCount : Math.max(1, visibleSteps.indexOf(props.step) + 1));
-const progress = computed(() => stepNumber.value / visibleStepCount * 100);
+const visibleSteps = computed(() => calibrationSteps(props.scope).filter((step) => step !== "backup" && step !== "complete"));
+const visibleStepCount = computed(() => visibleSteps.value.length);
+const stepNumber = computed(() => props.step === "complete" ? visibleStepCount.value : Math.max(1, visibleSteps.value.indexOf(props.step) + 1));
+const progress = computed(() => stepNumber.value / visibleStepCount.value * 100);
 const stickRanges = computed(() => [
   { label: "Left stick", data: props.leftRange },
   { label: "Right stick", data: props.rightRange },
@@ -178,6 +179,7 @@ const showControllerConfirmIcons = computed(() => (
 ));
 
 const copy = {
+  "trigger-start": ["Trigger calibration", "Leave L2 and R2 released. Only trigger calibration will change; stick calibration is preserved."],
   neutral: ["Stick center calibration", "Choose quick neutral sampling or automatic four-direction return measurement."],
   "sticks-range": ["Both stick ranges and roundness", "Sampling has started. Rotate both sticks around their outer gates until both coverage grids are complete, then continue once."],
   "triggers-released": ["Trigger released points", "Leave L2 and R2 completely released while a stable window is sampled."],
@@ -193,6 +195,7 @@ const instruction = computed(() => (
     : copy[props.step]?.[1] || "The analog calibration workflow is complete."
 ));
 const primaryLabel = computed(() => ({
+  "trigger-start": "Capture released",
   neutral: props.centerCaptureActive
     ? "Listening…"
     : props.calibrationMode === "quick" ? "Start quick calibration" : "Start standard calibration",
