@@ -6,22 +6,22 @@
   --bg-device: #edf2f7;
   --bg-tabs: #e9eff5;
   --surface-1: #ffffff;
-  --surface-2: #edf2f7;
-  --surface-hover: #e2ebf4;
+  --surface-2: #f0f3f6;
+  --surface-hover: #e7edf3;
   --border: rgba(25, 49, 75, .13);
   --border-strong: rgba(25, 49, 75, .25);
   --text: #182b40;
   --secondary: #455d75;
   --muted: #586d82;
-  --accent: #006b91;
-  --accent-2: #6253c6;
+  --accent: #2868a8;
+  --accent-2: #5186b9;
   --success: #14734c;
   --warning: #8b5900;
   --danger: #be2949;
-  --page-glow: #dfedf8;
+  --page-glow: #edf1f5;
   --panel-background: #ffffff;
   --inset-background: #f1f5f9;
-  --selected-background: #dceef7;
+  --selected-background: #e5eef7;
   --warning-background: #fff1ce;
   --warning-text: #805100;
   --danger-text: #a5213e;
@@ -54,3 +54,61 @@
   .app-navigation .app-navigation-icon { display: block; }
   .header-disconnect-label { display: none; }
 }
+
+/* Controller artwork and switches use a softer palette on light surfaces. */
+:root[data-theme="light"] .home-controller-icon,
+:root[data-theme="light"] .mapping-artwork-svg {
+  opacity: 1;
+  filter: drop-shadow(0 12px 18px rgba(43, 67, 91, .14));
+}
+:root[data-theme="light"] .controller-svg {
+  filter: drop-shadow(0 10px 18px rgba(43, 67, 91, .12));
+}
+:root[data-theme="light"] .mapping-artwork::before { background: rgba(100, 116, 139, .04); }
+:root[data-theme="light"] .controller-stage {
+  background: var(--surface-1);
+}
+:root[data-theme="light"] .rc-switch-track {
+  background: #dce3e9;
+  border-color: #a7b6c5;
+}
+:root[data-theme="light"] .rc-switch-track::after {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(35, 57, 79, .2);
+}
+:root[data-theme="light"] .rc-stage-switch input:checked + .rc-switch-track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+:root[data-theme="light"] .rc-stage-switch input:checked + .rc-switch-track::after { background: #fff; }
+:root[data-theme="light"] .stick-switcher-selection { border-color: #a7b6c5; box-shadow: 0 1px 3px #23465b14; }
+:root[data-theme="light"] .layer-switcher,
+:root[data-theme="light"] .view-switcher { background: var(--surface-2); }
+
+/* Recolor the vector body without affecting the live input highlight layer. */
+:root[data-theme="light"] .home-controller-icon svg [style*="fill:#cccccc"],
+:root[data-theme="light"] .mapping-artwork-svg svg [style*="fill:#cccccc"] { fill: #f1f3f5 !important; }
+:root[data-theme="light"] .home-controller-icon svg [style*="stroke:#000000"],
+:root[data-theme="light"] .mapping-artwork-svg svg [style*="stroke:#000000"] { stroke: #566474 !important; }
+
+/* Accessory controls share the light palette with the rest of the Portal. */
+:root[data-theme="light"] .accessory-selector button { background: var(--surface-1); }
+:root[data-theme="light"] .accessory-selector button:hover { background: var(--surface-hover); }
+:root[data-theme="light"] .accessory-selector button.active { background: var(--selected-background); }
+:root[data-theme="light"] .accessory-stage { background: var(--bg-device); }
+:root[data-theme="light"] .accessory-detail {
+  background: linear-gradient(160deg, #fff, #f5f8fb 75%);
+  border-color: var(--border-strong);
+  box-shadow: 0 16px 40px rgba(43, 67, 91, .12);
+}
+:root[data-theme="light"] .board-3d-viewer::after { background: #61758a; opacity: .14; }
+:root[data-theme="light"] .board-3d-pin {
+  background: #fff; color: var(--accent); border-color: #8caac8;
+  box-shadow: 0 0 0 4px rgba(40, 104, 168, .08), 0 3px 10px #23465b20;
+}
+:root[data-theme="light"] .board-3d-pin.active {
+  background: var(--accent); color: #fff;
+  box-shadow: 0 0 0 6px rgba(40, 104, 168, .14), 0 3px 12px #23465b25;
+}
+:root[data-theme="light"] .accessory-leader path,
+:root[data-theme="light"] .accessory-leader circle { filter: none; }
