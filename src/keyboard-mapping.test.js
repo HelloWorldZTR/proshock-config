@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  ACTION, GYRO_TOGGLE_MIN_BUILD, hasGyroToggle,
   KEYBOARD_ACTIONS, createDefaultResolver, validateResolver, writeResolver,
   parseResolver, resolverForVersion, canMapKeyboard,
 } from './resolver-schema.js';
@@ -78,4 +79,21 @@ test('keyboard UI is gated to base mappings, supported firmware, and allowed sou
   assert.match(source, /canMapKeyboard\(resolver.value, selectedSource.value\)/);
   assert.match(source, /v-model="keyboardQuery"/);
   assert.match(source, /action.family === "Keyboard"\) return action.id >= 0xf0 \? "Modifier key" : "Keyboard key"/);
+});
+
+test('gyro toggle works in base/Combo/Layer bindings and is rejected by old targets', () => {
+  const resolver = createDefaultResolver();
+  resolver.base_mapping[0] = ACTION.GYRO_TOGGLE;
+  resolver.combos.push({input_mask:3, leader_source_id:0, action_id:ACTION.GYRO_TOGGLE, enabled:true});
+  resolver.layers[0].overrides.push({source_id:1, action_id:ACTION.GYRO_TOGGLE});
+  assert.deepEqual(validateResolver(resolver), []);
+  assert.ok(hasGyroToggle(resolver));
+  assert.throws(() => resolverForVersion(resolver, 1), /invalid/);
+  const draft = profile(2);
+  draft.resolver = resolver;
+  assert.throws(() => writeProfileDraftToPayload(new Uint8Array(384), draft, {gyroToggleSupported:false}), /Update firmware/);
+  const raw = new Uint8Array(384);
+  writeProfileDraftToPayload(raw, draft, {gyroToggleSupported:true});
+  assert.equal(parseProfile(raw).resolver.combos[0].action_id, 0x46);
+  assert.equal(GYRO_TOGGLE_MIN_BUILD, 2026100902);
 });

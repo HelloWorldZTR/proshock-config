@@ -1,5 +1,6 @@
 export const RESOLVER_VERSION = 2;
 export const LEGACY_RESOLVER_VERSION = 1;
+export const GYRO_TOGGLE_MIN_BUILD = 2026100902;
 export const RESOLVER_OFFSET = 104;
 export const RESOLVER_SIZE = 148;
 export const SOURCE_COUNT = 28;
@@ -44,6 +45,7 @@ export const ACTION = {
   PROFILE_FIRST: 0x40,
   PROFILE_NEXT: 0x44,
   PROFILE_PREVIOUS: 0x45,
+  GYRO_TOGGLE: 0x46,
 };
 
 /** Standard Keyboard/Keypad usages 0x04 through 0x73, without media usages. */
@@ -84,6 +86,7 @@ export function resolverForVersion(resolver, version, { allowReserved = false } 
 }
 
 export const ACTION_OPTIONS = [
+  { id: ACTION.GYRO_TOGGLE, family: "Motion", label: "Toggle gyro output" },
   ...KEYBOARD_ACTIONS,
   { id: 0x00, family: "None", label: "None" },
   ...SOURCE_NAMES.slice(0, OUTPUT_COUNT).map((label, index) => ({
@@ -208,6 +211,7 @@ export function parseResolver(payload, baseOffset = RESOLVER_OFFSET) {
 }
 
 function validAction(resolver, actionId) {
+  if (actionId === ACTION.GYRO_TOGGLE) return resolver.resolver_version >= 2;
   if (actionId === 0) return true;
   if (actionId >= 0x01 && actionId <= 0x12) return true;
   if (actionId >= 0x20 && actionId <= 0x23) {
@@ -362,4 +366,11 @@ export function writeResolver(
     });
   });
   payload.set(new Uint8Array(resolver.reserved || 8).slice(0, 8), baseOffset + 140);
+}
+
+/** Check every binding before writing a profile to older firmware. */
+export function hasGyroToggle(resolver) {
+  return resolver.base_mapping.includes(ACTION.GYRO_TOGGLE)
+    || resolver.layers.some(layer => layer.overrides.some(entry => entry.action_id === ACTION.GYRO_TOGGLE))
+    || resolver.combos.some(combo => combo.action_id === ACTION.GYRO_TOGGLE);
 }

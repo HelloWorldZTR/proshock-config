@@ -126,6 +126,7 @@ const STICK_RC_SIZE = 32;
 import {
   createDefaultResolver,
   resolverForVersion,
+  hasGyroToggle,
   parseResolver,
   writeResolver,
 } from "./resolver-schema.js";
@@ -297,6 +298,9 @@ export function parseProfile(payload, index = 0) {
 }
 
 export function writeProfileDraftToPayload(payload, draft, resolverOptions = {}) {
+  if (resolverOptions.gyroToggleSupported === false && draft.resolver && hasGyroToggle(draft.resolver)) {
+    throw new Error("Update firmware to use Toggle gyro output.");
+  }
   if (payload.byteLength !== PROFILE_SIZE) {
     throw new Error(`Unexpected profile payload size: ${payload.byteLength}`);
   }

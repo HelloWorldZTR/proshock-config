@@ -516,6 +516,7 @@ import {
 import {
   ACTION,
   ACTION_OPTIONS,
+  GYRO_TOGGLE_MIN_BUILD,
   canMapKeyboard,
   isKeyboardAction,
   GPIO_NAMES,
@@ -528,6 +529,7 @@ import {
 } from "../resolver-schema.js";
 
 const props = defineProps({
+  firmwareBuildVersion: Number,
   resolver: Object,
   raw: Object,
   connected: Boolean,
@@ -588,6 +590,7 @@ const layerChoices = [
 const ACTION_FAMILIES = [
   { id: "Gamepad", label: "Gamepad", icon: "◉" },
   { id: "Keyboard", label: "Keyboard", icon: "⌨" },
+  { id: "Motion", label: "Motion", icon: "↻" },
   { id: "Macro", label: "Macros", icon: "M" },
   { id: "Layer", label: "Layers", icon: "L" },
   { id: "Profile", label: "Profiles", icon: "P" },
@@ -694,7 +697,8 @@ const filteredGroups = computed(() => {
   })).filter((group) => group.sources.length);
 });
 const availableActions = computed(() => ACTION_OPTIONS.filter((action) => (
-  (action.family !== "Macro" || action.id - ACTION.MACRO_FIRST < resolver.value.macros.length)
+  (action.id !== ACTION.GYRO_TOGGLE || props.firmwareBuildVersion >= GYRO_TOGGLE_MIN_BUILD)
+  && (action.family !== "Macro" || action.id - ACTION.MACRO_FIRST < resolver.value.macros.length)
   && (!isKeyboardAction(action.id) || (
     !editingLayer.value && selectedComboIndex.value === null
     && canMapKeyboard(resolver.value, selectedSource.value)
@@ -707,7 +711,7 @@ const targetActions = computed(() => (
 const actionFamilies = computed(() => ACTION_FAMILIES.map((family) => ({
   ...family,
   count: targetActions.value.filter((action) => action.family === family.id).length,
-})).filter((family) => family.id !== "Keyboard" || family.count));
+})).filter((family) => !["Keyboard", "Motion"].includes(family.id) || family.count));
 const activeFamilyMeta = computed(() => (
   actionFamilies.value.find((family) => family.id === activeActionFamily.value) || actionFamilies.value[0]
 ));
@@ -813,6 +817,7 @@ function formatHotspotCoordinate(hotspot) {
   return `${hotspot.x.toFixed(2)}%, ${hotspot.y.toFixed(2)}%`;
 }
 function actionDescriptor(action) {
+  if (action.family === "Motion") return "Press to mute or restore gyro; disabled sensor is unchanged";
   if (action.family === "Gamepad") {
     const output = action.id - ACTION.GAMEPAD_FIRST;
     if (output < 4) return "Face button";
@@ -827,6 +832,7 @@ function actionDescriptor(action) {
   return "No output";
 }
 function actionGlyph(action) {
+  if (action.family === "Motion") return "↻";
   if (action.family === "Keyboard") return "⌨";
   if (action.family === "Macro") return `M${action.id - ACTION.MACRO_FIRST + 1}`;
   if (action.family === "Layer") return "L";

@@ -38,7 +38,7 @@
       :calibration="calibrationDraft || defaultCalibration" :state-label="stateLabel"
       @connect="connectFlow" @switch-profile="requestProfileSwitch" @edit-profile="requestEditProfile"
     />
-    <ConfiguratorPage
+    <ConfiguratorPage :firmware-build-version="firmwareBuildVersion"
       v-else-if="page === 'configurator' && !iapMode"
       :section="configuratorSection" :selected-profile="selectedProfile"
       :profile="profileDraft" :baseline-profile="profileBackup" :pollrate-hz="pollrateHz"
@@ -173,7 +173,7 @@ import {
 } from "./services/import-export.js";
 import { CommandScheduler } from "./services/command-scheduler.js";
 import { createLiveInputSnapshot } from "./live-input.js";
-import { validateResolver } from "./resolver-schema.js";
+import { validateResolver, GYRO_TOGGLE_MIN_BUILD } from "./resolver-schema.js";
 import {
   consumeCalibrationConfirmEdge,
   createCalibrationConfirmLatch,
@@ -1125,6 +1125,7 @@ async function writeProfileValue(value, profileIndex) {
   const bytes = new Uint8Array(value.raw);
   writeProfileDraftToPayload(bytes, value, {
     targetVersion: (configInfo.value?.schema_version ?? 0) >= 12 ? 2 : 1,
+    gyroToggleSupported: firmwareBuildVersion.value >= GYRO_TOGGLE_MIN_BUILD,
   });
   const packet = await writeChunked(
     COMMAND.BEGIN_PROFILE_WRITE,

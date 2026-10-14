@@ -65,6 +65,7 @@
     <div v-else-if="section === 'buttons'" class="button-config-stack">
       <ResolverEditor
         :resolver="profile?.resolver"
+        :firmware-build-version="firmwareBuildVersion"
         :raw="raw"
         :connected="connected"
         :read-digital-input="readDigitalInput"
@@ -140,6 +141,7 @@ import ButtonDebounceControl from "../components/ButtonDebounceControl.vue";
 import HelpTip from "../components/HelpTip.vue";
 
 const props = defineProps({
+  firmwareBuildVersion: Number,
   section: String, selectedProfile: Number, profile: Object,
   baselineProfile: Object, pollrateHz: String, bootProfile: Number, ribbonMode: Number, adcBits: Number, raw: Object,
   snapshot: Object, calibration: Object, configInfo: Object,
