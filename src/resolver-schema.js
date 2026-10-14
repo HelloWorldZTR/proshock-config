@@ -1,4 +1,5 @@
-export const RESOLVER_VERSION = 1;
+export const RESOLVER_VERSION = 2;
+export const LEGACY_RESOLVER_VERSION = 1;
 export const RESOLVER_OFFSET = 104;
 export const RESOLVER_SIZE = 148;
 export const SOURCE_COUNT = 28;
@@ -45,7 +46,45 @@ export const ACTION = {
   PROFILE_PREVIOUS: 0x45,
 };
 
+/** Standard Keyboard/Keypad usages 0x04 through 0x73, without media usages. */
+const KEYBOARD_NAMES = [
+  ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+  ..."1234567890", "Enter", "Escape", "Backspace", "Tab", "Space",
+  "Minus", "Equal", "Left bracket", "Right bracket", "Backslash", "Non-US #",
+  "Semicolon", "Quote", "Grave", "Comma", "Period", "Slash", "Caps Lock",
+  ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`),
+  "Print Screen", "Scroll Lock", "Pause", "Insert", "Home", "Page Up", "Delete",
+  "End", "Page Down", "Right arrow", "Left arrow", "Down arrow", "Up arrow",
+  "Num Lock", "Keypad /", "Keypad *", "Keypad -", "Keypad +", "Keypad Enter",
+  ...Array.from({ length: 9 }, (_, i) => `Keypad ${i + 1}`),
+  "Keypad 0", "Keypad .", "Non-US backslash", "Application", "Power", "Keypad =",
+  ...Array.from({ length: 12 }, (_, i) => `F${i + 13}`),
+];
+export const KEYBOARD_ACTIONS = [
+  ...KEYBOARD_NAMES.map((label, i) => ({ id: 0x80 + i, usage: 4 + i, family: "Keyboard", label })),
+  ...["Left Ctrl", "Left Shift", "Left Alt", "Left GUI", "Right Ctrl", "Right Shift", "Right Alt", "Right GUI"]
+    .map((label, i) => ({ id: 0xf0 + i, usage: 0xe0 + i, family: "Keyboard", label })),
+];
+export function isKeyboardAction(id) {
+  return Number.isInteger(id) && id >= 0x80 && id <= 0xf7;
+}
+export function canMapKeyboard(resolver, sourceId) {
+  return resolver.resolver_version === RESOLVER_VERSION
+    && sourceId >= 0 && sourceId < CONNECTED_SOURCE_COUNT && ![6, 7].includes(sourceId);
+}
+/** Convert only the Resolver version; never silently drop unsupported bindings. */
+export function resolverForVersion(resolver, version, { allowReserved = false } = {}) {
+  if (![LEGACY_RESOLVER_VERSION, RESOLVER_VERSION].includes(version)) {
+    throw new Error("Unsupported target Resolver version.");
+  }
+  const result = { ...resolver, resolver_version: version };
+  const errors = validateResolver(result).filter((error) => !allowReserved || error !== "Reserved Resolver bytes must remain zero.");
+  if (errors.length) throw new Error(errors[0]);
+  return result;
+}
+
 export const ACTION_OPTIONS = [
+  ...KEYBOARD_ACTIONS,
   { id: 0x00, family: "None", label: "None" },
   ...SOURCE_NAMES.slice(0, OUTPUT_COUNT).map((label, index) => ({
     id: 0x01 + index, family: "Gamepad", label,
@@ -197,7 +236,7 @@ export function validateResolver(resolver) {
   ]);
   const overrides = resolver.layers.flatMap((layer) => layer.overrides);
   const steps = resolver.macros.flatMap((macro) => macro.steps);
-  if (resolver.resolver_version !== RESOLVER_VERSION) errors.push("Resolver version is unsupported.");
+  if (![LEGACY_RESOLVER_VERSION, RESOLVER_VERSION].includes(resolver.resolver_version)) errors.push("Resolver version is unsupported.");
   if (resolver.flags !== 0 || resolver.analog_route !== 0) errors.push("Reserved Resolver flags must remain zero.");
   if (Array.from(resolver.reserved || []).some((value) => value !== 0)) errors.push("Reserved Resolver bytes must remain zero.");
   if (resolver.layer_count != null && resolver.layer_count > LAYER_COUNT) errors.push("Layer count exceeds firmware capacity.");
@@ -210,7 +249,9 @@ export function validateResolver(resolver) {
   if (resolver.macros.length > MACRO_LIMIT) errors.push(`Macros use ${resolver.macros.length}/${MACRO_LIMIT}.`);
   if (steps.length > MACRO_STEP_LIMIT) errors.push(`Macro steps use ${steps.length}/${MACRO_STEP_LIMIT}.`);
   resolver.base_mapping.forEach((actionId, sourceId) => {
-    if (!validAction(resolver, actionId)) errors.push(`${SOURCE_NAMES[sourceId]} has an invalid action.`);
+    if (isKeyboardAction(actionId)) {
+      if (!canMapKeyboard(resolver, sourceId)) errors.push(`${SOURCE_NAMES[sourceId]} cannot use a keyboard action on this firmware.`);
+    } else if (!validAction(resolver, actionId)) errors.push(`${SOURCE_NAMES[sourceId]} has an invalid action.`);
     if (sourceId >= CONNECTED_SOURCE_COUNT && actionId !== 0) errors.push(`${SOURCE_NAMES[sourceId]} is reserved.`);
   });
   resolver.layers.forEach((layer, layerIndex) => {
@@ -277,7 +318,7 @@ export function writeResolver(
   payload.fill(0, baseOffset, baseOffset + RESOLVER_SIZE);
   const overrides = resolver.layers.flatMap((layer) => layer.overrides);
   const steps = resolver.macros.flatMap((macro) => macro.steps);
-  payload[baseOffset] = RESOLVER_VERSION;
+  payload[baseOffset] = resolver.resolver_version;
   payload[baseOffset + 3] = LAYER_COUNT;
   payload[baseOffset + 4] = overrides.length;
   payload[baseOffset + 5] = resolver.combos.length;

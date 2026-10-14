@@ -250,11 +250,14 @@
               <small>{{ family.count }}</small>
             </button>
           </nav>
-          <div class="action-menu-column">
+          <div class="action-menu-column" :class="{ 'has-keyboard-search': activeFamilyMeta.id === 'Keyboard' }">
             <div class="action-menu-heading">
               <span>{{ activeFamilyMeta.label }}</span>
               <small>{{ familyActions.length }} available</small>
             </div>
+            <label v-if="activeFamilyMeta.id === 'Keyboard'" class="keyboard-action-search">
+              <input v-model="keyboardQuery" type="search" placeholder="Search keyboard keys" aria-label="Search keyboard keys">
+            </label>
             <div v-if="activeActionFamily === 'Macro' && !familyActions.length" class="empty-action-family">
               <span>No macros recorded</span>
               <button type="button" class="primary" @click="openManagerDrawer('macros')">Record macro</button>
@@ -275,7 +278,7 @@
                 />
                 <span v-else class="action-family-glyph">{{ actionGlyph(action) }}</span>
                 <span class="action-list-copy">
-                  <strong :data-i18n-ignore="action.family === 'Gamepad' ? '' : null">{{ action.label }}</strong>
+                  <strong :data-i18n-ignore="['Gamepad', 'Keyboard'].includes(action.family) ? '' : null">{{ action.label }}</strong>
                   <small>{{ actionDescriptor(action) }}</small>
                 </span>
                 <b v-if="selectedTargetAction === action.id">Assigned</b>
@@ -513,6 +516,8 @@ import {
 import {
   ACTION,
   ACTION_OPTIONS,
+  canMapKeyboard,
+  isKeyboardAction,
   GPIO_NAMES,
   MACRO_MODES,
   SOURCE_GROUPS,
@@ -542,6 +547,7 @@ const comboCaptureMask = ref(0);
 const comboCaptureLimited = ref(false);
 const comboCaptureError = ref("");
 const activeActionFamily = ref("Gamepad");
+const keyboardQuery = ref("");
 const hotspotDebugEnabled = ref(false);
 const debugSource = ref(0);
 const debugAutoAdvance = ref(true);
@@ -581,6 +587,7 @@ const layerChoices = [
 ];
 const ACTION_FAMILIES = [
   { id: "Gamepad", label: "Gamepad", icon: "◉" },
+  { id: "Keyboard", label: "Keyboard", icon: "⌨" },
   { id: "Macro", label: "Macros", icon: "M" },
   { id: "Layer", label: "Layers", icon: "L" },
   { id: "Profile", label: "Profiles", icon: "P" },
@@ -687,7 +694,11 @@ const filteredGroups = computed(() => {
   })).filter((group) => group.sources.length);
 });
 const availableActions = computed(() => ACTION_OPTIONS.filter((action) => (
-  action.family !== "Macro" || action.id - ACTION.MACRO_FIRST < resolver.value.macros.length
+  (action.family !== "Macro" || action.id - ACTION.MACRO_FIRST < resolver.value.macros.length)
+  && (!isKeyboardAction(action.id) || (
+    !editingLayer.value && selectedComboIndex.value === null
+    && canMapKeyboard(resolver.value, selectedSource.value)
+  ))
 )));
 const comboActions = computed(() => availableActions.value);
 const targetActions = computed(() => (
@@ -696,12 +707,13 @@ const targetActions = computed(() => (
 const actionFamilies = computed(() => ACTION_FAMILIES.map((family) => ({
   ...family,
   count: targetActions.value.filter((action) => action.family === family.id).length,
-})));
+})).filter((family) => family.id !== "Keyboard" || family.count));
 const activeFamilyMeta = computed(() => (
   actionFamilies.value.find((family) => family.id === activeActionFamily.value) || actionFamilies.value[0]
 ));
 const familyActions = computed(() => (
-  targetActions.value.filter((action) => action.family === activeActionFamily.value)
+  targetActions.value.filter((action) => action.family === activeFamilyMeta.value.id
+    && (action.family !== "Keyboard" || action.label.toLowerCase().includes(keyboardQuery.value.trim().toLowerCase())))
 ));
 const comboCaptureActive = computed(() => (
   comboCaptureState.value === "waiting-neutral" || comboCaptureState.value === "capturing"
@@ -808,12 +820,14 @@ function actionDescriptor(action) {
     if (output < 14) return "System control";
     return "D-pad direction";
   }
+  if (action.family === "Keyboard") return action.id >= 0xf0 ? "Modifier key" : "Keyboard key";
   if (action.family === "Macro") return "Recorded sequence";
   if (action.family === "Layer") return "Mapping layer control";
   if (action.family === "Profile") return "Runtime profile control";
   return "No output";
 }
 function actionGlyph(action) {
+  if (action.family === "Keyboard") return "⌨";
   if (action.family === "Macro") return `M${action.id - ACTION.MACRO_FIRST + 1}`;
   if (action.family === "Layer") return "L";
   if (action.family === "Profile") return "P";

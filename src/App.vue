@@ -1123,7 +1123,9 @@ async function writeCalibration() {
 
 async function writeProfileValue(value, profileIndex) {
   const bytes = new Uint8Array(value.raw);
-  writeProfileDraftToPayload(bytes, value);
+  writeProfileDraftToPayload(bytes, value, {
+    targetVersion: (configInfo.value?.schema_version ?? 0) >= 12 ? 2 : 1,
+  });
   const packet = await writeChunked(
     COMMAND.BEGIN_PROFILE_WRITE,
     COMMAND.SET_PROFILE_CHUNK,

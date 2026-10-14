@@ -3,7 +3,7 @@
 ProShock 4 的浏览器 WebHID 配置工具。它通过固定 63 字节 V2 WebHID
 数据包配置手柄 profile、摇杆与扳机校准、输入映射及轮询率。
 
-固件始终只暴露一个 DS4-compatible HID interface 和一个顶层 Game Pad Collection。
+新固件同时暴露 DS4（interface 0）和标准键盘（interface 1）；仍只有一个顶层 Game Pad Collection。
 配置协议使用该 Collection 内的 vendor Feature Report `0xF0`，不会创建第二个
 Windows 游戏控制器，也没有临时 Configuration Mode。点击连接只会打开浏览器的
 WebHID handle；连接、断开和关闭页面都不会让 USB 重新枚举或中断游戏手柄上报。
@@ -198,3 +198,20 @@ Cancel / Escape 关闭对话框并丢弃本次弹窗修改。清除槽位会将�
 1 kHz 体感采样独立于 8 kHz USB 回报；是否达到实际时序预算需要上板测量。
 新命令为 `0x15 GET_MOTION` 和 `0x16 SET_MOTION`，通过既有 Feature 0xF0 传输，
 不增加 HID 接口或重新枚举。
+
+## 基础键盘映射（schema 12 / Resolver v2）
+
+基础映射新增“键盘”分类与搜索，支持常用键、F1–F24 和左右 Ctrl/Shift/Alt/GUI。
+一个物理按钮对应一个动作；多个按钮可共同组成快捷键。L2/R2、未接入的 K9/K10
+不能映射键盘，层和组合键的输出选项、宏编辑器保持原有能力。层覆盖和组合键消费
+仍会影响基础映射。最多同时输出六个普通键，修饰键独立计数；超出时报告 rollover。
+
+新增键盘固定使用 `0x81 IN`，DS4 和配置 Feature Report `0xF0` 保持原位置。
+本版没有鼠标接口、独立配置 HID、多 backend 或重新枚举功能。
+Apply 更新 RAM，Save 才写入闪存；映射生效和 Profile 切换会释放旧按键，
+当时仍按住的按钮须松开后重新按下。键盘队列溢出诊断位为模拟快照 validation_flags 的 bit 7。
+
+Profile 仍为 384 字节、版本 7，Resolver 仍为 148 字节。工具兼容 Resolver v1/v2，
+仅在 v2 显示键盘选项。导入时匹配目标设备版本；带键盘映射的 Profile 不能写入旧固件。
+USB 身份仍为 Sony VID/PID，首版以 Windows/macOS 实机为验收目标，Linux 驱动绑定
+和 PS4 真机兼容另行记录，不以编译通过代替硬件验证。

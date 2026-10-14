@@ -63,7 +63,7 @@ test("Profile import preserves reserved bytes from target slot", () => {
   source.stick_shape[0].scale_q15[4] = 45678;
   const envelope = exportProfile(source);
   const target = fixtureProfile();
-  target.raw.fill(0xa5, 104);
+  target.raw.fill(0xa5, 244, 252);
   const imported = importProfile(envelope, 2, target.raw);
   assert.deepEqual(imported.color_rgb, [1, 2, 3]);
   assert.equal(imported.pollrate_hz, 4000);

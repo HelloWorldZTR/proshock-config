@@ -81,7 +81,7 @@ export const CONFIG_INFO_SIZE = 56;
 export const RAW_SIZE = 20;
 export const DIGITAL_INPUT_SIZE = 8;
 export const PROTOCOL_VERSION = 2;
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 export const FEATURE_RIBBON_HML = 0x00000001;
 export const CAPABILITY_RIBBON_MODE = 0x01;
 export const FEATURE_ADC_DEPTH_MASK = 0x06;
@@ -125,6 +125,7 @@ const STICK_RC_SIZE = 32;
 
 import {
   createDefaultResolver,
+  resolverForVersion,
   parseResolver,
   writeResolver,
 } from "./resolver-schema.js";
@@ -314,7 +315,9 @@ export function writeProfileDraftToPayload(payload, draft, resolverOptions = {})
   });
   writeResolver(
     payload,
-    draft.resolver || createDefaultResolver(),
+    resolverOptions.targetVersion == null
+      ? (draft.resolver || createDefaultResolver())
+      : resolverForVersion(draft.resolver || createDefaultResolver(), resolverOptions.targetVersion, resolverOptions),
     undefined,
     resolverOptions,
   );

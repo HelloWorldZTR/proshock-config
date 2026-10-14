@@ -142,7 +142,9 @@ export function importProfile(envelope, targetIndex, baselineRaw = null) {
     const known = parseProfile(source, targetIndex);
     known.resolver.reserved = preserved.slice(244, 252);
     known.raw = preserved;
-    writeProfileDraftToPayload(preserved, known, { allowReserved: true });
+    writeProfileDraftToPayload(preserved, known, {
+      allowReserved: true, targetVersion: baselineRaw[104],
+    });
     return parseProfile(preserved, targetIndex);
   }
   return imported;
