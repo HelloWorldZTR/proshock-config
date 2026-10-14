@@ -1,6 +1,6 @@
 <template>
   <section class="analog-directions">
-    <header><div class="help-label"><h2>Hardware directions</h2><HelpTip id="R07" /></div><p>Move right/down, press triggers. If the preview is reversed, turn on Invert.</p></header>
+    <header><div class="help-label"><h2>Hardware directions</h2><HelpTip id="R07" /></div><p data-i18n-ignore>{{ directionHint }}</p></header>
     <p v-if="!supported" class="support-note">Update firmware to support configurable analog directions.</p>
     <div class="editor-split direction-split">
       <div class="direction-fields">
@@ -37,6 +37,10 @@
 </template>
 <script setup>
 import { computed } from "vue";
+import { currentLocale } from "../i18n.js";
+const directionHint = computed(() => currentLocale.value === "zh-CN"
+  ? "向右或向下移动摇杆、按下扳机。如果预览方向相反，请开启反转。如果安装了 PS5 TMR 摇杆，需要开启 LX、RX 反转。"
+  : "Move right/down, press triggers. If the preview is reversed, turn on Invert. If PS5 TMR sticks are installed, enable inversion for LX and RX.");
 import { normalizeAxis, normalizedTrigger } from "../calibration.js";
 import { analogAxisInvert } from "../analog-direction.js";
 import StickRoundnessPreview from "./StickRoundnessPreview.vue";

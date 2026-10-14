@@ -14,3 +14,7 @@
 .settings-footer-status .help-tip { align-self: center; }
 .settings-footer-status .help-tip-trigger { min-height: 22px; height: 22px; }
 @media(max-width:680px) { .rc-reset-button span { display: none; } }
+
+.deadzone-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.deadzone-inline-label { margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; font: inherit; color: inherit; }
+.deadzone-exact-input { width: 65px; min-height: 27px; padding: 2px 5px; font: inherit; text-align: right; border-color: var(--border); background: var(--surface-1); }

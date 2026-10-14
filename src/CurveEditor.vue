@@ -12,7 +12,12 @@
     </div>
     <div class="deadzone-grid">
       <div class="deadzone-setting">
-        <div class="help-label"><span>Inner deadzone {{ percent(modelValue.inner_deadzone_q15) }}%</span><HelpTip v-if="showHelp" id="R08" /></div>
+        <div class="deadzone-heading"><div class="help-label"><span>Inner deadzone</span><HelpTip v-if="showHelp" id="R08" /></div><label class="deadzone-inline-label"><input
+          class="deadzone-exact-input" type="number" min="0" max="40" step="0.1" inputmode="decimal"
+          :aria-label="`${label} inner deadzone exact value`"
+          :value="percent(modelValue.inner_deadzone_q15)"
+          @change="setExactDeadzone('inner_deadzone_q15', $event)"
+        ><span>%</span></label></div>
         <input
           type="range"
           :aria-label="`${label} inner deadzone`"
@@ -24,7 +29,12 @@
         >
       </div>
       <div class="deadzone-setting">
-        <div class="help-label"><span>Outer deadzone {{ percent(modelValue.outer_deadzone_q15) }}%</span><HelpTip v-if="showHelp" id="R09" /></div>
+        <div class="deadzone-heading"><div class="help-label"><span>Outer deadzone</span><HelpTip v-if="showHelp" id="R09" /></div><label class="deadzone-inline-label"><input
+          class="deadzone-exact-input" type="number" min="0" max="40" step="0.1" inputmode="decimal"
+          :aria-label="`${label} outer deadzone exact value`"
+          :value="percent(modelValue.outer_deadzone_q15)"
+          @change="setExactDeadzone('outer_deadzone_q15', $event)"
+        ><span>%</span></label></div>
         <input
           type="range"
           :aria-label="`${label} outer deadzone`"
@@ -205,6 +215,19 @@ function cloneResponse() {
 
 function percent(value) {
   return Math.round((value / Q15_ONE) * 1000) / 10;
+}
+
+/** @brief Commit a finite percentage at slider precision, restoring empty input. */
+function setExactDeadzone(field, event) {
+  const input = event.target;
+  const value = input.valueAsNumber;
+  if (!Number.isFinite(value)) {
+    input.value = percent(props.modelValue[field]);
+    return;
+  }
+  const bounded = Math.round(Math.max(0, Math.min(40, value)) * 10) / 10;
+  input.value = bounded;
+  setDeadzone(field, bounded);
 }
 
 function setDeadzone(field, value) {
