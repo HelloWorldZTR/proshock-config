@@ -786,6 +786,8 @@ registerLocale("zh-CN", "中文", {
   "Capacity": "容量",
   "Disabled": "禁用",
   "Gamepad": "手柄",
+  "Switch to light mode": "切换到浅色模式",
+  "Switch to dark mode": "切换到深色模式",
   "Keyboard": "键盘",
   "Motion": "体感",
   "Toggle gyro output": "切换陀螺仪输出",

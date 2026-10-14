@@ -1,0 +1,47 @@
+/* Light palette applies to the entire document, including teleported dialogs. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-canvas: #f3f6fa;
+  --bg-device: #edf2f7;
+  --bg-tabs: #e9eff5;
+  --surface-1: #ffffff;
+  --surface-2: #edf2f7;
+  --surface-hover: #e2ebf4;
+  --border: rgba(25, 49, 75, .13);
+  --border-strong: rgba(25, 49, 75, .25);
+  --text: #182b40;
+  --secondary: #455d75;
+  --muted: #586d82;
+  --accent: #006b91;
+  --accent-2: #6253c6;
+  --success: #14734c;
+  --warning: #8b5900;
+  --danger: #be2949;
+  --page-glow: #dfedf8;
+  --panel-background: #ffffff;
+  --inset-background: #f1f5f9;
+  --selected-background: #dceef7;
+  --warning-background: #fff1ce;
+  --warning-text: #805100;
+  --danger-text: #a5213e;
+  --success-text: #146541;
+  --ui-ink-rgb: 25,49,75;
+  --ui-surface-rgb: 255,255,255;
+}
+.theme-toggle { flex-shrink: 0; height: 34px; min-height: 34px; color: var(--secondary); }
+.connection-gate-panel { position: relative; }
+.gate-theme-toggle { position: absolute; top: 12px; right: 12px; }
+:root[data-theme="light"] button.primary { color: #fff; }
+:root[data-theme="light"] .connection-gate-panel { box-shadow: 0 24px 90px #24446020; }
+:root[data-theme="light"] .stick-switcher { background: var(--surface-2); }
+:root[data-theme="light"] .stick-switcher-selection { background: var(--selected-background); }
+:root[data-theme="light"] .board-3d-viewer { background: radial-gradient(ellipse at center, #e4edf4, #f3f6fa); }
+:root[data-theme="light"] .board-3d-hint { color: var(--secondary); }
+@media (max-width: 700px) {
+  .app-header { grid-template-columns: 40px minmax(0, 1fr) max-content; gap: 4px; padding-inline: 6px; }
+  .app-navigation { overflow-x: auto; scrollbar-width: none; }
+  .app-navigation button { flex: 0 0 34px; min-width: 34px; padding-inline: 6px; }
+  .app-navigation .app-navigation-full, .app-navigation .app-navigation-short { display: none; }
+  .app-navigation .app-navigation-icon { display: block; }
+  .header-disconnect-label { display: none; }
+}

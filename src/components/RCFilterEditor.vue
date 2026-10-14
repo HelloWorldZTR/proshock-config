@@ -151,6 +151,7 @@
 </template>
 
 <script setup>
+import { currentTheme } from "../theme.js";
 import {
   Chart,
   Legend,
@@ -267,7 +268,7 @@ function setGain(stickIndex, gain) {
 
 /** @brief Build response curves for the selected stick and the 0 dB guide. */
 function responseDatasets() {
-  const colors = ["#55d6ff", "#ffb020"];
+  const colors = currentTheme.value === "light" ? ["#006b91", "#995600"] : ["#55d6ff", "#ffb020"];
   const stageStyle = {
     Smoothing: { borderDash: [3, 4], borderWidth: 1.4 },
     Boost: { borderDash: [8, 4], borderWidth: 1.4 },
@@ -288,7 +289,7 @@ function responseDatasets() {
   datasets.push({
     label: translate("0 dB reference"),
     data: [{ x: 1, y: 0 }, { x: 4000, y: 0 }],
-    borderColor: "rgba(255,255,255,.72)",
+    borderColor: currentTheme.value === "light" ? "#586d82" : "rgba(255,255,255,.72)",
     borderDash: [2, 3],
     borderWidth: 1.5,
     pointRadius: 0,
@@ -301,6 +302,14 @@ function updateChart() {
   chart.data.datasets = responseDatasets();
   chart.options.scales.x.title.text = translate("Frequency (Hz)");
   chart.options.scales.y.title.text = translate("Magnitude (dB)");
+  const light = currentTheme.value === "light";
+  chart.options.plugins.legend.labels.color = light ? "#455d75" : "#aebdca";
+  for (const axis of Object.values(chart.options.scales)) {
+    axis.title.color = axis.ticks.color = light ? "#586d82" : "#7f91a1";
+    axis.grid.color = (context) => context.tick.value === 0
+      ? (light ? "rgba(25,49,75,.5)" : "rgba(255,255,255,.5)")
+      : (light ? "rgba(25,49,75,.13)" : "rgba(255,255,255,.055)");
+  }
   chart.update("none");
 }
 
@@ -341,8 +350,9 @@ onMounted(() => {
       },
     },
   });
+  updateChart();
 });
 
-watch([() => props.profile?.stick_rc, selectedStick, currentLocale], updateChart, { deep: true });
+watch([() => props.profile?.stick_rc, selectedStick, currentLocale, currentTheme], updateChart, { deep: true });
 onUnmounted(() => chart?.destroy());
 </script>

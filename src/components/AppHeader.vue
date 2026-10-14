@@ -59,6 +59,7 @@
     </nav>
 
     <div class="app-header-actions">
+      <ThemeToggle />
       <div class="more-wrap language-menu-wrap">
         <button ref="languageTrigger" type="button" class="icon-button header-language-button" title="Language" aria-label="Language" aria-haspopup="menu" :aria-expanded="languageOpen" @click="toggleLanguageMenu">
           <Globe class="icon" />
@@ -127,6 +128,7 @@
 </template>
 
 <script setup>
+import ThemeToggle from "./ThemeToggle.vue";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   Activity,

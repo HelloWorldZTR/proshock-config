@@ -1,6 +1,7 @@
 <template>
   <div class="connection-gate">
     <section ref="panel" class="connection-gate-panel" role="dialog" aria-modal="true" aria-labelledby="connection-title" tabindex="-1" @keydown="trapFocus">
+      <ThemeToggle class="gate-theme-toggle" />
       <span class="gate-symbol" aria-hidden="true">↗</span>
       <h1 id="connection-title">{{ firmware ? "Connect for firmware recovery" : "Connect your controller" }}</h1>
       <p>{{ firmware ? "Connect an IAP controller to continue. Hold PS + Options while reconnecting power to enter recovery." : "Connect and load your controller settings to use this page." }}</p>
@@ -19,6 +20,7 @@
   </div>
 </template>
 <script setup>
+import ThemeToggle from "./ThemeToggle.vue";
 import { onMounted, onUnmounted, ref } from "vue";
 defineProps({ firmware: Boolean, busy: Boolean, error: String, development: Boolean, conflict: Boolean, blocked: Boolean });
 defineEmits(["connect", "home", "dismiss", "export", "reload"]);

@@ -5,7 +5,10 @@ import "./locales/zh-CN.js";
 import "./styles.css";
 import "./ui-corrections.css";
 import "./help.css";
+import "./theme.css";
+import { initializeTheme } from "./theme.js";
 
+initializeTheme();
 initializeI18n();
 createApp(App).mount("#app");
 // Include viewport-level dialogs teleported outside #app.
