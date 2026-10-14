@@ -2,6 +2,7 @@
 :root[data-theme="light"] {
   color-scheme: light;
   --bg-canvas: #f3f6fa;
+  --community-discord: #4f46b5;
   --bg-device: #edf2f7;
   --bg-tabs: #e9eff5;
   --surface-1: #ffffff;
@@ -37,6 +38,14 @@
 :root[data-theme="light"] .stick-switcher-selection { background: var(--selected-background); }
 :root[data-theme="light"] .board-3d-viewer { background: radial-gradient(ellipse at center, #e4edf4, #f3f6fa); }
 :root[data-theme="light"] .board-3d-hint { color: var(--secondary); }
+/* Keep the expanded navigation readable on laptops. */
+@media (min-width: 701px) and (max-width: 1399px) {
+  .app-header { grid-template-columns: 100px minmax(0, 1fr) max-content; gap: 10px; }
+  .app-navigation { overflow-x: auto; scrollbar-width: none; }
+  .app-navigation button { flex: 0 0 auto; padding-inline: 9px; font-size: 10px; }
+  .app-navigation-full { display: none; }
+  .app-navigation-short { display: block; }
+}
 @media (max-width: 700px) {
   .app-header { grid-template-columns: 40px minmax(0, 1fr) max-content; gap: 4px; padding-inline: 6px; }
   .app-navigation { overflow-x: auto; scrollbar-width: none; }

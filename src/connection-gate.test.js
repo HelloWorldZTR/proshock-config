@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { isConnectionBlocked } from './connection-gate.js';
 
 /** Verify no release build page can use the development dismissal flag. */
-test('only Home and firmware are offline-accessible in production, even with dismissal set', () => {
-  for (const page of ['home', 'configurator', 'calibration', 'accessories', 'diagnostics', 'firmware']) {
-    assert.equal(isConnectionBlocked({ page, connected: false, iapReady: false, development: false, dismissed: true }), !['home', 'firmware'].includes(page));
+test('Home, firmware and About are offline-accessible in production, even with dismissal set', () => {
+  for (const page of ['home', 'configurator', 'calibration', 'accessories', 'diagnostics', 'firmware', 'about']) {
+    assert.equal(isConnectionBlocked({ page, connected: false, iapReady: false, development: false, dismissed: true }), !['home', 'firmware', 'about'].includes(page));
   }
 });
 test('development dismissal allows preview but defaults to the same gate', () => {

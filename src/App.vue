@@ -102,6 +102,7 @@
       @ribbon-mode="setRibbonMode" @direction="setAnalogDirection"
       @buttons="requestGo('configurator', 'buttons')"
     />
+    <AboutPage v-else-if="page === 'about'" />
     <DiagnosticsPage
       v-else
       :section="diagnosticsSection" :raw="latestRaw" :snapshot="liveInputSnapshot"
@@ -156,6 +157,7 @@ import ManualBoundsEditor from "./components/ManualBoundsEditor.vue";
 import AppHeader from "./components/AppHeader.vue";
 import SettingsApplyFooter from "./components/SettingsApplyFooter.vue";
 import UnsavedChangesDialog from "./components/UnsavedChangesDialog.vue";
+import AboutPage from "./pages/AboutPage.vue";
 import HomePage from "./pages/HomePage.vue";
 import ConfiguratorPage from "./pages/ConfiguratorPage.vue";
 import QuickCalibrationPage from "./pages/QuickCalibrationPage.vue";
@@ -396,6 +398,7 @@ const navigation = [
   { id: "firmware", label: "Firmware Upgrade" },
   { id: "accessories", label: "Accessory Center" },
   { id: "diagnostics", label: "Diagnostics" },
+  { id: "about", label: "About" },
 ];
 const profileChanged = computed(() => (
   profileDraft.value && profileBackup.value
@@ -481,7 +484,7 @@ const headerState = computed(() => deriveHeaderState({
 }));
 const automaticCalibrationPage = computed(() => !iapMode.value && page.value === "calibration" && calibrationSection.value === "automatic");
 // Every connected configuration page shares one persistent action bar.
-const settingsFooterVisible = computed(() => !iapMode.value && !automaticCalibrationPage.value
+const settingsFooterVisible = computed(() => page.value !== "about" && !iapMode.value && !automaticCalibrationPage.value
   && (connected.value || page.value === "configurator" || page.value === "calibration"));
 // The footer uses the same action as the header; offline connection stays in the header.
 const settingsActionState = computed(() => connected.value ? headerState.value : {

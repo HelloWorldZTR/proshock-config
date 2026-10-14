@@ -138,6 +138,7 @@ import {
   ChevronDown,
   Gauge,
   Home,
+  Info,
   LogOut,
   MoreHorizontal,
   RefreshCw,
@@ -192,6 +193,7 @@ const navigation = [
   { id: "firmware", label: "Firmware Upgrade", shortLabel: "Upgrade", icon: UploadCloud },
   { id: "accessories", label: "Accessory Center", shortLabel: "Accessories", icon: Blocks },
   { id: "diagnostics", label: "Diagnostics", shortLabel: "Diagnostics", icon: Activity },
+  { id: "about", label: "About", shortLabel: "About", icon: Info },
 ];
 
 /** @brief Toggle the language dropdown and close other header menus. */
