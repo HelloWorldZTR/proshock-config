@@ -1,6 +1,12 @@
 import { registerLocale } from "../i18n.js";
 
 registerLocale("zh-CN", "中文", {
+  "Anti-deadzone": "反死区",
+  "Gain {value}×": "增益 {value}×",
+  "Update firmware to use anti-deadzone.": "请升级固件以使用反死区。",
+  "Anti-deadzone is ignored when inner deadzone is 0%.": "内死区为 0% 时，反死区不生效。",
+  "Drag curve points or enter output values below. The first point controls anti-deadzone gain when enabled.": "拖动曲线控制点，或在下方输入输出值。反死区生效时，首个控制点与增益联动。",
+
   "Invert": "反转",
   "{axis} invert": "{axis} 反转",
   "Move right/down, press triggers. If the preview is reversed, turn on Invert.": "向右或向下移动摇杆、按下扳机。如果预览方向相反，请开启反转。",

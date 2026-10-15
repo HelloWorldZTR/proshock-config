@@ -937,11 +937,20 @@ function setCalibrationBound({ kind = "axis", index, axis, field, value }) {
 function resetCurves(kind) {
   const field = kind === "sticks" ? "stick_response" : "trigger_response";
   profileDraft.value[field] = [createLinearResponse(), createLinearResponse()];
+  if (kind === "sticks") profileDraft.value.stick_rc.forEach((rc) => {
+    rc.anti_deadzone_enabled = 0;
+    rc.anti_deadzone_gain_tenths = 0;
+  });
 }
 
 function copyCurve(kind) {
   const field = kind === "sticks" ? "stick_response" : "trigger_response";
   profileDraft.value[field][1] = clone(profileDraft.value[field][0]);
+  if (kind === "sticks") {
+    const [source, target] = profileDraft.value.stick_rc;
+    target.anti_deadzone_enabled = source.anti_deadzone_enabled || 0;
+    target.anti_deadzone_gain_tenths = source.anti_deadzone_gain_tenths || 0;
+  }
 }
 
 function downloadJson(filename, value) {
@@ -1122,6 +1131,9 @@ async function writeCalibration() {
 }
 
 async function writeProfileValue(value, profileIndex) {
+  if (configInfo.value?.schema_version < 13 && value.stick_rc?.some(
+    (rc) => rc.anti_deadzone_enabled || rc.anti_deadzone_gain_tenths,
+  )) throw new Error("Update firmware to use anti-deadzone.");
   const bytes = new Uint8Array(value.raw);
   writeProfileDraftToPayload(bytes, value);
   const packet = await writeChunked(

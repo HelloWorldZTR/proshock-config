@@ -32,6 +32,10 @@
             :label="responseLabels[index]"
             :model-value="response"
             :baseline-value="baselineResponses?.[index]"
+            :anti-config="section === 'sticks' ? profile?.stick_rc?.[index] : null"
+            :baseline-anti-config="section === 'sticks' ? baselineProfile?.stick_rc?.[index] : null"
+            :anti-supported="!connected || configInfo?.schema_version >= 13"
+            @update:anti-config="$emit('stick-rc', { stickIndex: index, value: $event })"
             :show-help="section === 'sticks'"
             @update:model-value="$emit('response', { kind: section, index, value: $event })"
           />

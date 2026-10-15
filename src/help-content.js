@@ -30,8 +30,8 @@ export const HELP_CONTENT = Object.freeze({
     "zh-CN": { title: "硬件方向", body: "安装非默认的 PS4 摇杆后，可能需要反转对应方向；以预览是否与实际推动一致为准。" },
   },
   R08: {
-    en: { title: "Inner deadzone", body: "Add a small inner deadzone if a released stick drifts on its own. If it stays centered, you can leave this at zero." },
-    "zh-CN": { title: "内死区", body: "摇杆松手后会自行漂移时，可以设置少量内死区；没有漂移则可以不设置。" },
+    en: { title: "Inner deadzone", body: "Add a small inner deadzone if a released stick drifts on its own. If it stays centered, you can leave this at zero. Anti-deadzone instead amplifies this region by 1–5× and joins the outer curve continuously. It is ignored at 0%; center noise is amplified too." },
+    "zh-CN": { title: "内死区", body: "摇杆松手后会自行漂移时，可以设置少量内死区；没有漂移则可以不设置。开启反死区后，此范围改为 1～5 倍增益并连续衔接后续曲线；内死区为 0% 时忽略。中心漂移也会被放大。" },
   },
   R09: {
     en: { title: "Outer deadzone", body: "Increase the outer deadzone to make the stick reach full output earlier in its travel." },

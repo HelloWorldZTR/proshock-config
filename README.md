@@ -198,3 +198,20 @@ Cancel / Escape 关闭对话框并丢弃本次弹窗修改。清除槽位会将�
 1 kHz 体感采样独立于 8 kHz USB 回报；是否达到实际时序预算需要上板测量。
 新命令为 `0x15 GET_MOTION` 和 `0x16 SET_MOTION`，通过既有 Feature 0xF0 传输，
 不增加 HID 接口或重新枚举。
+
+### Anti-deadzone (firmware schema 13)
+
+Each stick has an independent toggle beside inner deadzone and a 1–5× gain
+(default 2×, step 0.1×). Inner deadzone 0% ignores the setting. The plot now uses
+physical response input 0–100%: gray proportional deadzone bands, an orange
+center-gain band when enabled, and a continuous final-output curve. Its first
+editable node sits at the inner boundary and adjusts gain in both directions;
+it is locked when disabled or when the inner deadzone is zero. Intermediate
+nodes preserve the normalized base curve, including when toggling off again.
+
+Schema 13 consumes bytes 10/11 of each 32-byte stick RC block for enable and gain
+in tenths (zero means default 20). Profile/Resolver sizes remain 384/148 bytes.
+Unknown remaining bytes are preserved by the encoder. Old firmware disables
+this feature; Apply rejects profiles containing these parameters on schema <13.
+Apply/Save, profile import/export, copy and reset retain their existing flow.
+No website deployment is needed for local tests: `npm test`, `npm run build -- --base /`.
