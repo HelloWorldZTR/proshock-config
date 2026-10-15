@@ -629,3 +629,28 @@ test('gyro calibration rejects unsupported firmware, busy sessions and unapplied
     assert.equal(run('commands.length'), 0);
   }
 });
+
+test('enabling only anti-deadzone on schema 13 Resolver v2 remains applicable and writes v2', async () => {
+  const run = harness();
+  run(`connected.value = true;
+    configInfo.value = { schema_version:13, boot_profile:0, feature_flags:0 };
+    profileDraft.value.resolver.resolver_version = 2;
+    profileDraft.value.resolver.base_mapping[18] = 0x80;
+    profileDraft.value.resolver.base_mapping[19] = 0x46;
+    profileBackup.value = clone(profileDraft.value);
+    setStickRc({stickIndex:0,value:{...profileDraft.value.stick_rc[0],anti_deadzone_enabled:1,anti_deadzone_gain_tenths:20}});
+    let submittedBytes;
+    writeChunked = async (begin,set,commit,bytes) => {
+      submittedBytes=bytes; const payload=new Uint8Array(56);
+      new DataView(payload.buffer).setUint16(0,13,true); payload[7]=1;
+      return {payload};
+    };`);
+  assert.equal(run('applyValid.value'), true);
+  assert.equal(run('canApply.value'), true);
+  await run('writeProfile()');
+  assert.equal(run('submittedBytes[104]'), 2);
+  assert.equal(run('submittedBytes[104+8+18]'), 0x80);
+  assert.equal(run('submittedBytes[104+8+19]'), 0x46);
+  assert.equal(run('hasDraft.value'), false);
+  assert.equal(run('canSave.value'), true);
+});

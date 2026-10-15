@@ -1,4 +1,5 @@
-export const RESOLVER_VERSION = 1;
+export const RESOLVER_VERSION = 2;
+export const LEGACY_RESOLVER_VERSION = 1;
 export const RESOLVER_OFFSET = 104;
 export const RESOLVER_SIZE = 148;
 export const SOURCE_COUNT = 28;
@@ -169,6 +170,7 @@ export function parseResolver(payload, baseOffset = RESOLVER_OFFSET) {
 }
 
 function validAction(resolver, actionId) {
+  if (actionId === 0x46) return resolver.resolver_version >= 2;
   if (actionId === 0) return true;
   if (actionId >= 0x01 && actionId <= 0x12) return true;
   if (actionId >= 0x20 && actionId <= 0x23) {
@@ -197,7 +199,7 @@ export function validateResolver(resolver) {
   ]);
   const overrides = resolver.layers.flatMap((layer) => layer.overrides);
   const steps = resolver.macros.flatMap((macro) => macro.steps);
-  if (resolver.resolver_version !== RESOLVER_VERSION) errors.push("Resolver version is unsupported.");
+  if (![LEGACY_RESOLVER_VERSION, RESOLVER_VERSION].includes(resolver.resolver_version)) errors.push("Resolver version is unsupported.");
   if (resolver.flags !== 0 || resolver.analog_route !== 0) errors.push("Reserved Resolver flags must remain zero.");
   if (Array.from(resolver.reserved || []).some((value) => value !== 0)) errors.push("Reserved Resolver bytes must remain zero.");
   if (resolver.layer_count != null && resolver.layer_count > LAYER_COUNT) errors.push("Layer count exceeds firmware capacity.");
@@ -210,7 +212,11 @@ export function validateResolver(resolver) {
   if (resolver.macros.length > MACRO_LIMIT) errors.push(`Macros use ${resolver.macros.length}/${MACRO_LIMIT}.`);
   if (steps.length > MACRO_STEP_LIMIT) errors.push(`Macro steps use ${steps.length}/${MACRO_STEP_LIMIT}.`);
   resolver.base_mapping.forEach((actionId, sourceId) => {
-    if (!validAction(resolver, actionId)) errors.push(`${SOURCE_NAMES[sourceId]} has an invalid action.`);
+    if (Number.isInteger(actionId) && actionId >= 0x80 && actionId <= 0xf7) {
+      if (resolver.resolver_version < 2 || [6, 7].includes(sourceId) || sourceId >= CONNECTED_SOURCE_COUNT) {
+        errors.push(`${SOURCE_NAMES[sourceId]} cannot use a keyboard action on this firmware.`);
+      }
+    } else if (!validAction(resolver, actionId)) errors.push(`${SOURCE_NAMES[sourceId]} has an invalid action.`);
     if (sourceId >= CONNECTED_SOURCE_COUNT && actionId !== 0) errors.push(`${SOURCE_NAMES[sourceId]} is reserved.`);
   });
   resolver.layers.forEach((layer, layerIndex) => {
@@ -277,7 +283,7 @@ export function writeResolver(
   payload.fill(0, baseOffset, baseOffset + RESOLVER_SIZE);
   const overrides = resolver.layers.flatMap((layer) => layer.overrides);
   const steps = resolver.macros.flatMap((macro) => macro.steps);
-  payload[baseOffset] = RESOLVER_VERSION;
+  payload[baseOffset] = resolver.resolver_version;
   payload[baseOffset + 3] = LAYER_COUNT;
   payload[baseOffset + 4] = overrides.length;
   payload[baseOffset + 5] = resolver.combos.length;
@@ -321,4 +327,12 @@ export function writeResolver(
     });
   });
   payload.set(new Uint8Array(resolver.reserved || 8).slice(0, 8), baseOffset + 140);
+}
+
+/** @brief Match the connected firmware without losing unsupported existing bindings. */
+export function resolverForVersion(resolver, version) {
+  const next = { ...resolver, resolver_version: version };
+  const errors = validateResolver(next);
+  if (errors.length) throw new Error(errors[0]);
+  return next;
 }

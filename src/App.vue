@@ -173,7 +173,7 @@ import {
 } from "./services/import-export.js";
 import { CommandScheduler } from "./services/command-scheduler.js";
 import { createLiveInputSnapshot } from "./live-input.js";
-import { validateResolver } from "./resolver-schema.js";
+import { validateResolver, resolverForVersion } from "./resolver-schema.js";
 import {
   consumeCalibrationConfirmEdge,
   createCalibrationConfirmLatch,
@@ -1140,7 +1140,10 @@ async function writeProfileValue(value, profileIndex) {
     throw new Error("Update firmware to adjust the curve endpoint.");
   }
   const bytes = new Uint8Array(value.raw);
-  writeProfileDraftToPayload(bytes, value);
+  const schema = configInfo.value?.schema_version;
+  const targetResolverVersion = schema ? (schema >= 12 ? 2 : 1) : value.resolver.resolver_version;
+  writeProfileDraftToPayload(bytes, { ...value,
+    resolver: resolverForVersion(value.resolver, targetResolverVersion) });
   const packet = await writeChunked(
     COMMAND.BEGIN_PROFILE_WRITE,
     COMMAND.SET_PROFILE_CHUNK,

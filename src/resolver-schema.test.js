@@ -86,3 +86,22 @@ test("Macro duration validation rejects negative, fractional and nonnumeric impo
     assert.match(validateResolver(resolver)[0], /4–1020/);
   }
 });
+
+test('Resolver v1/v2 round trips preserve versions and restrict keyboard to valid v2 base inputs', () => {
+  for (const version of [1, 2]) {
+    const resolver = createDefaultResolver(); resolver.resolver_version = version;
+    const payload = new Uint8Array(256); writeResolver(payload, resolver);
+    assert.equal(parseResolver(payload).resolver_version, version);
+  }
+  const resolver = createDefaultResolver();
+  resolver.base_mapping[18] = 0xf7;
+  assert.deepEqual(validateResolver(resolver), []);
+  resolver.resolver_version = 1;
+  assert.ok(validateResolver(resolver).length);
+  resolver.resolver_version = 2;
+  resolver.base_mapping[6] = 0x80;
+  assert.ok(validateResolver(resolver).length);
+  resolver.base_mapping[6] = 7;
+  resolver.layers[0].overrides.push({source_id:18,action_id:0x80});
+  assert.ok(validateResolver(resolver).length);
+});
