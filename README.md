@@ -201,17 +201,39 @@ Cancel / Escape 关闭对话框并丢弃本次弹窗修改。清除槽位会将�
 
 ### Anti-deadzone (firmware schema 13)
 
-Each stick has an independent toggle beside inner deadzone and a 1–5× gain
+Each stick has an independent toggle beside inner deadzone and a 0–5× gain
 (default 2×, step 0.1×). Inner deadzone 0% ignores the setting. The plot now uses
 physical response input 0–100%: gray proportional deadzone bands, an orange
 center-gain band when enabled, and a continuous final-output curve. Its first
 editable node sits at the inner boundary and adjusts gain in both directions;
-it is locked when disabled or when the inner deadzone is zero. Intermediate
+Dragging it upward enables anti-deadzone; dragging its output to zero disables it. Intermediate
 nodes preserve the normalized base curve, including when toggling off again.
 
 Schema 13 consumes bytes 10/11 of each 32-byte stick RC block for enable and gain
-in tenths (zero means default 20). Profile/Resolver sizes remain 384/148 bytes.
+in tenths (zero disables anti-deadzone). Profile/Resolver sizes remain 384/148 bytes.
 Unknown remaining bytes are preserved by the encoder. Old firmware disables
 this feature; Apply rejects profiles containing these parameters on schema <13.
 Apply/Save, profile import/export, copy and reset retain their existing flow.
 No website deployment is needed for local tests: `npm test`, `npm run build -- --base /`.
+
+### Curve drag preview
+
+Dragging an interior node past its original successor previews subsequent nodes
+as translucent ghosts against its gesture-start curve. Below that threshold,
+only the selected node moves; returning below it immediately restores the tail. Raising the selected node from `y` to `y'` previews
+`yi' = 1 - (1 - yi) * (1 - y') / (1 - y)` for later nodes. The profile draft is
+updated only on release: the tail is committed only if the final selected value
+exceeds its original next node. Crossing that node and returning before release
+keeps all original tail values. Downward movement remains bounded by the previous
+node. Escape, pointer cancellation and capture loss discard the preview. Keyboard
+and numeric edits apply the same release rule immediately. The anti-deadzone
+boundary node continues to adjust gain independently.
+
+
+Both curve endpoints now support two-axis dragging. Horizontal movement adjusts
+inner/outer deadzone within the existing 0–40% range. The left endpoint auto-enables
+anti-deadzone for positive output and clamps gain to 0–5×; zero output disables it.
+Raising it from zero inner deadzone first seeds a 0.1% inner range. The right
+endpoint can lower the final output (bounded below by its preceding node), and
+the outer-deadzone plateau follows that output. Firmware schema 13 validation
+accepts these monotonic reduced-endpoint curves; older firmware cannot apply them.

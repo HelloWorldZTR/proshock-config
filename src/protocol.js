@@ -217,6 +217,8 @@ export function createDefaultStickRc() {
     boost_fast_alpha_q15: 10532,
     boost_slow_alpha_q15: 1995,
     boost_gain_q8_8: 64,
+    anti_deadzone_enabled: 0,
+    anti_deadzone_gain_tenths: 20,
   };
 }
 

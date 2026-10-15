@@ -1,6 +1,9 @@
 import { registerLocale } from "../i18n.js";
 
 registerLocale("zh-CN", "中文", {
+  "Drag to preview following points. Release above the original next point to rescale them; drag back to keep them unchanged. The first point controls anti-deadzone gain.": "拖动时预览后续节点；松手时高于原下一节点才按比例更新，拖回则保留后续原值。首节点控制反死区增益。",
+  "Curve nodes must be monotonic and within 0–100%, and deadzones must leave a usable range.": "曲线节点须单调且位于 0～100% 范围内，内外死区之间须保留有效输入范围。",
+  "Update firmware to adjust the curve endpoint.": "请升级固件以调节曲线终点。",
   "Anti-deadzone": "反死区",
   "Gain {value}×": "增益 {value}×",
   "Update firmware to use anti-deadzone.": "请升级固件以使用反死区。",

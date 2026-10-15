@@ -179,6 +179,7 @@ import {
   createCalibrationConfirmLatch,
 } from "./calibration-controls.js";
 import {
+  Q15_ONE,
   ANALOG_CALIBRATION_SIZE,
   BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
   COMMAND,
@@ -1134,6 +1135,10 @@ async function writeProfileValue(value, profileIndex) {
   if (configInfo.value?.schema_version < 13 && value.stick_rc?.some(
     (rc) => rc.anti_deadzone_enabled || rc.anti_deadzone_gain_tenths,
   )) throw new Error("Update firmware to use anti-deadzone.");
+  if (configInfo.value?.schema_version < 13 &&
+      [...value.stick_response, ...value.trigger_response].some((response) => response.curve.output_q15[8] !== Q15_ONE)) {
+    throw new Error("Update firmware to adjust the curve endpoint.");
+  }
   const bytes = new Uint8Array(value.raw);
   writeProfileDraftToPayload(bytes, value);
   const packet = await writeChunked(

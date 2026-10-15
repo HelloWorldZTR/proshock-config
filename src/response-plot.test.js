@@ -12,7 +12,7 @@ test('physical plot uses proportional deadzones and continuous center gain', () 
   assert.equal(off.nodes[0].output, 0);
   assert.equal(off.nodes[8].input, 1 - 1638 / Q15_ONE);
   assert.equal(off.nodes[8].output, 1);
-  for (let gain = 10; gain <= 50; gain++) {
+  for (let gain = 1; gain <= 50; gain++) {
     const plot = responseGeometry(r, { anti_deadzone_enabled: 1, anti_deadzone_gain_tenths: gain });
     assert.ok(Math.abs(plot.nodes[0].output - plot.inner * gain / 10) < 1e-12);
     assert.equal(gainFromBoundary(plot.inner, plot.boundary), gain);
@@ -26,7 +26,7 @@ test('zero inner deadzone ignores gain; saturation adds the actual full-output k
   const plot = responseGeometry({ ...response(), inner_deadzone_q15: 13107 }, anti);
   assert.deepEqual(plot.line[1], { input: 0.2, output: 1 });
   assert.ok(plot.nodes.every((p) => p.output === 1));
-  assert.equal(gainFromBoundary(0.1, 0), 10);
+  assert.equal(gainFromBoundary(0.1, 0), 0);
   assert.equal(gainFromBoundary(0.1, 1), 50);
 });
 test('anti-deadzone survives profile encoding independently, preserving unknown bytes', () => {
@@ -46,6 +46,6 @@ test('anti-deadzone survives profile encoding independently, preserving unknown 
   assert.equal(parsed.stick_rc[1].anti_deadzone_enabled, 0);
   assert.equal(bytes[340], 0x5a);
   assert.equal(validateStickRc(left), true);
-  for (const gain of [9, 51, -1, 20.5]) assert.equal(validateStickRc({ ...left, anti_deadzone_gain_tenths: gain }), false);
+  for (const gain of [51, -1, 20.5]) assert.equal(validateStickRc({ ...left, anti_deadzone_gain_tenths: gain }), false);
   assert.equal(validateStickRc({ ...left, anti_deadzone_enabled: 2 }), false);
 });

@@ -36,7 +36,7 @@ export function validateStickRc(rc) {
   const gain = rc.anti_deadzone_gain_tenths ?? 0;
   return [0, 1].includes(enabled)
     && Number.isInteger(gain)
-    && (gain === 0 || (gain >= 10 && gain <= 50))
+    && (gain >= 0 && gain <= 50)
     && Number.isInteger(flags)
     && (flags & ~0x03) === 0
     && Number.isInteger(rc.smoothing_alpha_q15)
