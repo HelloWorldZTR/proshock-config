@@ -184,6 +184,7 @@ import {
   createCalibrationConfirmLatch,
 } from "./calibration-controls.js";
 import {
+  Q15_ONE,
   ANALOG_CALIBRATION_SIZE,
   BUTTON_DEBOUNCE_DEFAULT_SAMPLES,
   COMMAND,
@@ -949,11 +950,20 @@ function setCalibrationBound({ kind = "axis", index, axis, field, value }) {
 function resetCurves(kind) {
   const field = kind === "sticks" ? "stick_response" : "trigger_response";
   profileDraft.value[field] = [createLinearResponse(), createLinearResponse()];
+  if (kind === "sticks") profileDraft.value.stick_rc.forEach((rc) => {
+    rc.anti_deadzone_enabled = 0;
+    rc.anti_deadzone_gain_tenths = 0;
+  });
 }
 
 function copyCurve(kind) {
   const field = kind === "sticks" ? "stick_response" : "trigger_response";
   profileDraft.value[field][1] = clone(profileDraft.value[field][0]);
+  if (kind === "sticks") {
+    const [source, target] = profileDraft.value.stick_rc;
+    target.anti_deadzone_enabled = source.anti_deadzone_enabled || 0;
+    target.anti_deadzone_gain_tenths = source.anti_deadzone_gain_tenths || 0;
+  }
 }
 
 function downloadJson(filename, value) {
@@ -1134,6 +1144,13 @@ async function writeCalibration() {
 }
 
 async function writeProfileValue(value, profileIndex) {
+  if (configInfo.value?.schema_version < 13 && value.stick_rc?.some(
+    (rc) => rc.anti_deadzone_enabled || rc.anti_deadzone_gain_tenths,
+  )) throw new Error("Update firmware to use anti-deadzone.");
+  if (configInfo.value?.schema_version < 13 &&
+      [...value.stick_response, ...value.trigger_response].some((response) => response.curve.output_q15[8] !== Q15_ONE)) {
+    throw new Error("Update firmware to adjust the curve endpoint.");
+  }
   const bytes = new Uint8Array(value.raw);
   writeProfileDraftToPayload(bytes, value, {
     targetVersion: (configInfo.value?.schema_version ?? 0) >= 12 ? 2 : 1,

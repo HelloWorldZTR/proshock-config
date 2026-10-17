@@ -1,6 +1,15 @@
 import { registerLocale } from "../i18n.js";
 
 registerLocale("zh-CN", "中文", {
+  "Drag to preview following points. Release above the original next point to rescale them; drag back to keep them unchanged. The first point controls anti-deadzone gain.": "拖动时预览后续节点；松手时高于原下一节点才按比例更新，拖回则保留后续原值。首节点控制反死区增益。",
+  "Curve nodes must be monotonic and within 0–100%, and deadzones must leave a usable range.": "曲线节点须单调且位于 0～100% 范围内，内外死区之间须保留有效输入范围。",
+  "Update firmware to adjust the curve endpoint.": "请升级固件以调节曲线终点。",
+  "Anti-deadzone": "反死区",
+  "Gain {value}×": "增益 {value}×",
+  "Update firmware to use anti-deadzone.": "请升级固件以使用反死区。",
+  "Anti-deadzone is ignored when inner deadzone is 0%.": "内死区为 0% 时，反死区不生效。",
+  "Drag curve points or enter output values below. The first point controls anti-deadzone gain when enabled.": "拖动曲线控制点，或在下方输入输出值。反死区生效时，首个控制点与增益联动。",
+
   "Invert": "反转",
   "{axis} invert": "{axis} 反转",
   "Move right/down, press triggers. If the preview is reversed, turn on Invert. If PS5 TMR sticks are installed, enable inversion for LX and RX.": "向右或向下移动摇杆、按下扳机。如果预览方向相反，请开启反转。如果安装了 PS5 TMR 摇杆，需要开启 LX、RX 反转。",

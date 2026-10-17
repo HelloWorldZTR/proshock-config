@@ -903,7 +903,6 @@ export function validateResponse(response) {
     && response.curve.flags === 0
     && points.length === 9
     && points[0] === 0
-    && points[8] === Q15_ONE
     && points.every((point, index) => (
       point >= 0
       && point <= Q15_ONE

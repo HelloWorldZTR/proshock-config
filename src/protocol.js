@@ -81,7 +81,7 @@ export const CONFIG_INFO_SIZE = 56;
 export const RAW_SIZE = 20;
 export const DIGITAL_INPUT_SIZE = 8;
 export const PROTOCOL_VERSION = 2;
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 export const FEATURE_RIBBON_HML = 0x00000001;
 export const CAPABILITY_RIBBON_MODE = 0x01;
 export const FEATURE_ADC_DEPTH_MASK = 0x06;
@@ -219,6 +219,8 @@ export function createDefaultStickRc() {
     boost_fast_alpha_q15: 10532,
     boost_slow_alpha_q15: 1995,
     boost_gain_q8_8: 64,
+    anti_deadzone_enabled: 0,
+    anti_deadzone_gain_tenths: 20,
   };
 }
 
@@ -238,6 +240,8 @@ function parseStickRc(view, offset) {
     boost_fast_alpha_q15: view.getUint16(offset + 4, true),
     boost_slow_alpha_q15: view.getUint16(offset + 6, true),
     boost_gain_q8_8: view.getUint16(offset + 8, true),
+    anti_deadzone_enabled: view.getUint8(offset + 10),
+    anti_deadzone_gain_tenths: view.getUint8(offset + 11),
   };
 }
 
@@ -249,7 +253,9 @@ function writeStickRc(payload, view, offset, rc) {
   view.setUint16(offset + 4, Number(value.boost_fast_alpha_q15), true);
   view.setUint16(offset + 6, Number(value.boost_slow_alpha_q15), true);
   view.setUint16(offset + 8, Number(value.boost_gain_q8_8), true);
-  payload.fill(0, offset + 10, offset + STICK_RC_SIZE);
+  view.setUint8(offset + 10, value.anti_deadzone_enabled || 0);
+  view.setUint8(offset + 11, value.anti_deadzone_gain_tenths || 0);
+  // Preserve unknown reserved bytes when editing an existing profile.
 }
 
 export function parseProfile(payload, index = 0) {

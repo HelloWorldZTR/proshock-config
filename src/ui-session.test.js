@@ -679,3 +679,89 @@ test('back to a partial calibration start clears its draft so capture can be res
   assert.equal(run('wizardStep.value'), 'neutral');
   assert.equal(run('calibrationChanged.value'), false);
 });
+
+test('enabling only anti-deadzone on schema 13 Resolver v2 remains applicable and writes v2', async () => {
+  const run = harness();
+  run(`connected.value = true;
+    configInfo.value = { schema_version:13, boot_profile:0, feature_flags:0 };
+    firmwareBuildVersion.value = 2026101509;
+    profileDraft.value.resolver.resolver_version = 2;
+    profileDraft.value.resolver.base_mapping[18] = 0x80;
+    profileDraft.value.resolver.base_mapping[19] = 0x46;
+    profileBackup.value = clone(profileDraft.value);
+    setStickRc({stickIndex:0,value:{...profileDraft.value.stick_rc[0],anti_deadzone_enabled:1,anti_deadzone_gain_tenths:20}});
+    let submittedBytes;
+    writeChunked = async (begin,set,commit,bytes) => {
+      submittedBytes=bytes; const payload=new Uint8Array(56);
+      new DataView(payload.buffer).setUint16(0,13,true); payload[7]=1;
+      return {payload};
+    };`);
+  assert.equal(run('applyValid.value'), true);
+  assert.equal(run('canApply.value'), true);
+  await run('writeProfile()');
+  assert.equal(run('submittedBytes[104]'), 2);
+  assert.equal(run('submittedBytes[104+8+18]'), 0x80);
+  assert.equal(run('submittedBytes[104+8+19]'), 0x46);
+  assert.equal(run('hasDraft.value'), false);
+  assert.equal(run('canSave.value'), true);
+});
+
+test('0.5.3 schema 11 applies ordinary settings as Resolver v1 and saves separately', async () => {
+  const run = harness();
+  run(`connected.value = true;
+    configInfo.value = { schema_version:11, boot_profile:0, feature_flags:0, dirty:false };
+    firmwareBuildVersion.value = 2026100301;
+    const legacyBytes = new Uint8Array(profileDraft.value.raw);
+    legacyBytes[104] = 1;
+    legacyBytes.fill(0, 330, 352);
+    legacyBytes.fill(0, 362, 384);
+    profileDraft.value = parseProfile(legacyBytes, 0);
+    profileBackup.value = clone(profileDraft.value);
+    captureSavedBaselines(true);
+    profileDraft.value.stick_response[0].inner_deadzone_q15 = 1638;
+    profileDraft.value.resolver.base_mapping[18] = 2;
+    let submittedBytes, saved = 0, deviceDirty = 0;
+    const deviceInfo = () => {
+      const payload = new Uint8Array(56);
+      new DataView(payload.buffer).setUint16(0, 11, true);
+      payload[7] = deviceDirty;
+      return {payload};
+    };
+    writeChunked = async (begin, set, commit, bytes) => {
+      submittedBytes = bytes; deviceDirty = 1; return deviceInfo();
+    };
+    command = async (id) => {
+      if (id === COMMAND.SAVE_CONFIG) { saved++; deviceDirty = 0; return {payload:new Uint8Array(16)}; }
+      return deviceInfo();
+    };`);
+  assert.equal(run('canApply.value'), true);
+  await run('writeProfile()');
+  assert.equal(run('submittedBytes[104]'), 1);
+  assert.equal(run('parseProfile(submittedBytes).stick_response[0].inner_deadzone_q15'), 1638);
+  assert.equal(run('parseProfile(submittedBytes).resolver.base_mapping[18]'), 2);
+  assert.equal(run('submittedBytes.slice(330,352).every(value => value === 0)'), true);
+  assert.equal(run('submittedBytes.slice(362,384).every(value => value === 0)'), true);
+  assert.equal(run('saved'), 0);
+  assert.equal(run('canSave.value'), true);
+  assert.equal(await run('saveConfig()'), true);
+  assert.equal(run('saved'), 1);
+  assert.equal(run('canSave.value'), false);
+});
+
+test('0.5.3 rejects newer profile features before sending any write', async () => {
+  for (const [change, error] of [
+    ['profileDraft.value.stick_rc[0].anti_deadzone_enabled = 1', /anti-deadzone/],
+    ['profileDraft.value.stick_response[0].curve.output_q15[8] = 30000', /curve endpoint/],
+    ['profileDraft.value.trigger_response[0].curve.output_q15[8] = 30000', /curve endpoint/],
+    ['profileDraft.value.resolver.base_mapping[18] = 0x80', /keyboard/],
+    ['profileDraft.value.resolver.base_mapping[18] = 0x46', /Toggle gyro output/],
+  ]) {
+    const run = harness();
+    run(`configInfo.value = {schema_version:11}; firmwareBuildVersion.value = 2026100301;
+      profileDraft.value.stick_rc.forEach(rc => {rc.anti_deadzone_enabled=0;rc.anti_deadzone_gain_tenths=0});
+      let writes = 0; writeChunked = async () => { writes++; };
+      ${change};`);
+    await assert.rejects(run('writeProfileValue(profileDraft.value, 0)'), error);
+    assert.equal(run('writes'), 0);
+  }
+});
