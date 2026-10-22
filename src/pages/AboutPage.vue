@@ -5,6 +5,10 @@
       <h1>Built to play.<br><span>Better together.</span></h1>
       <p>Meet other players, share your setup, and help shape what comes next.</p>
     </section>
+    <section class="manual-card">
+      <div><h2>Product Manual</h2><p>Installation guides, optional accessories, and firmware updates.</p></div>
+      <a class="community-action qq-action" :href="manualUrl" target="_blank" rel="noopener noreferrer"><span>Read the manual</span><ArrowUpRight aria-hidden="true" /></a>
+    </section>
     <div class="community-grid">
       <article class="community-card community-discord">
         <header><span class="community-platform"><MessagesSquare aria-hidden="true" /> Discord</span><span class="community-tag">GLOBAL</span></header>
@@ -30,10 +34,17 @@
 </template>
 <script setup>
 import { ArrowUpRight, MessageCircle, MessagesSquare } from "@lucide/vue";
+import { computed } from "vue";
+import { currentLocale } from "../i18n.js";
 const base = import.meta.env.BASE_URL;
+const manualUrl = computed(() => currentLocale.value.startsWith("zh") ? "https://docs.proshock.pro/" : "https://docs.proshock.pro/en/");
 </script>
 <style scoped>
 .about-page { max-width: 1100px; padding-top: 60px; }
+.manual-card { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; margin-bottom: 24px; padding: 24px; border: 1px solid var(--border-strong); border-radius: 16px; background: var(--surface-1); }
+.manual-card h2 { margin: 0 0 8px; font-size: 20px; }
+.manual-card p { margin: 0; font-size: 13px; }
+.manual-card .community-action { width: auto; }
 .about-intro { max-width: 660px; margin: 0 auto 38px; text-align: center; }
 .about-kicker { display: inline-flex; align-items: center; gap: 9px; color: var(--secondary); font: 10px var(--font-mono); letter-spacing: .18em; }
 .about-kicker > span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent); }
